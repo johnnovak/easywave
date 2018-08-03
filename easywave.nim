@@ -505,7 +505,6 @@ proc raiseWaveWriteError() {.noreturn.} =
 
 proc writeBuf(ww: var WaveWriter, data: pointer, len: Natural) =
   ww.checkFileClosed()
-  ww.checkChunkStarted()
   if writeBuffer(ww.file, data, len) != len:
     raiseWaveWriteError()
   inc(ww.dataLen, len)
@@ -604,19 +603,21 @@ proc writeData*(ww: var WaveWriter,
   ww.writeBuf(data[0].addr, len)
 
 
-proc writeDataLE*(ww: var WaveWriter,
-                  data: var openArray[int16|uint16], len: Natural) =
+proc writeData16LE*(ww: var WaveWriter, data: pointer, len: Natural) =
   const WIDTH = 2
+  assert len mod WIDTH == 0
+
   when system.cpuEndian == bigEndian:
     let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
     var
+      src = cast[ptr UncheckedArray[int8]](data)
       pos = 0
       destPos = 0
 
     while pos < len:
-      littleEndian16(ww.writeBuffer[destPos].addr, data[pos].addr)
+      littleEndian16(ww.writeBuffer[destPos].addr, src[pos].addr)
       inc(destPos, WIDTH)
-      inc(pos)
+      inc(pos, WIDTH)
       if destPos >= writeBufferSize:
         ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
         destPos = 0
@@ -624,22 +625,24 @@ proc writeDataLE*(ww: var WaveWriter,
     if destPos > 0:
       ww.writeBuf(ww.writeBuffer[0].addr, destPos)
   else:
-    ww.writeBuf(data[0].addr, len * WIDTH)
+    ww.writeBuf(data, len)
 
 
-proc writeDataLE*(ww: var WaveWriter,
-                  data: var openArray[int32|uint32|float32], len: Natural) =
+proc writeData32LE*(ww: var WaveWriter, data: pointer, len: Natural) =
   const WIDTH = 4
+  assert len mod WIDTH == 0
+
   when system.cpuEndian == bigEndian:
     let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
     var
+      src = cast[ptr UncheckedArray[int8]](data)
       pos = 0
       destPos = 0
 
     while pos < len:
-      littleEndian32(ww.writeBuffer[destPos].addr, data[pos].addr)
+      littleEndian32(ww.writeBuffer[destPos].addr, src[pos].addr)
       inc(destPos, WIDTH)
-      inc(pos)
+      inc(pos, WIDTH)
       if destPos >= writeBufferSize:
         ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
         destPos = 0
@@ -647,22 +650,24 @@ proc writeDataLE*(ww: var WaveWriter,
     if destPos > 0:
       ww.writeBuf(ww.writeBuffer[0].addr, destPos)
   else:
-    ww.writeBuf(data[0].addr, len * WIDTH)
+    ww.writeBuf(data, len)
 
 
-proc writeDataLE*(ww: var WaveWriter,
-                  data: var openArray[int64|uint64|float64], len: Natural) =
+proc writeData64LE*(ww: var WaveWriter, data: pointer, len: Natural) =
   const WIDTH = 8
+  assert len mod WIDTH == 0
+
   when system.cpuEndian == bigEndian:
     let writeBufferSize = (ww.writeBuf.len div WIDTH) * WIDTH
     var
+      src = cast[ptr UncheckedArray[int8]](data)
       pos = 0
       destPos = 0
 
     while pos < len:
-      littleEndian64(ww.writeBuffer[destPos].addr, data[pos].addr)
+      littleEndian64(ww.writeBuffer[destPos].addr, src[pos].addr)
       inc(destPos, WIDTH)
-      inc(pos)
+      inc(pos, WIDTH)
       if destPos >= writeBufferSize:
         ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
         destPos = 0
@@ -670,15 +675,7 @@ proc writeDataLE*(ww: var WaveWriter,
     if destPos > 0:
       ww.writeBuf(ww.writeBuffer[0].addr, destPos)
   else:
-    ww.writeBuf(data[0].addr, len * WIDTH)
-
-
-proc writeData*(ww: var WaveWriter, data: var openArray[int8|uint8]) =
-  writeData(ww, data, data.len)
-
-proc writeDataLE*(wr: var WaveReader,
-                  data: var openArray[int16|uint16|int32|uint32|int64|uint64|float32|float64]) =
-  writeDataLE(wr, data, data.len)
+    ww.writeBuf(data, len)
 
 # }}}
 
@@ -724,18 +721,16 @@ proc writeFormatChunk*(ww: var WaveWriter) =
   var bitsPerSample: uint16
 
   case ww.format
-  of wf8BitInteger:  formatTag = WAVE_FORMAT_PCM; bitsPerSample = 8
-  of wf16BitInteger: formatTag = WAVE_FORMAT_PCM; bitsPerSample = 16
-  of wf24BitInteger: formatTag = WAVE_FORMAT_PCM; bitsPerSample = 24
-  of wf32BitInteger: formatTag = WAVE_FORMAT_PCM; bitsPerSample = 32
-  of wf32BitFloat:   formatTag = WAVE_FORMAT_PCM; bitsPerSample = 32
-  of wf64BitFloat:   formatTag = WAVE_FORMAT_PCM; bitsPerSample = 64
+  of wf8BitInteger:  formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 8
+  of wf16BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 16
+  of wf24BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 24
+  of wf32BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 32
+  of wf32BitFloat:   formatTag = WAVE_FORMAT_IEEE_FLOAT; bitsPerSample = 32
+  of wf64BitFloat:   formatTag = WAVE_FORMAT_IEEE_FLOAT; bitsPerSample = 64
 
   var blockAlign = (ww.numChannels.uint16 * bitsPerSample div 8).uint16
   var avgBytesPerSec = ww.sampleRate.uint32 * blockAlign
 
-  ww.writeFourCC(FOURCC_FORMAT)
-  ww.writeUInt32LE(2+2+4+4+2+2)
   ww.writeUInt16LE(formatTag)
   ww.writeUInt16LE(ww.numChannels.uint16)
   ww.writeUInt32LE(ww.sampleRate.uint32)
@@ -796,8 +791,6 @@ when isMainModule:
   echo ""
   for id, r in wr.regions.pairs:
     echo fmt"id: {id}, {r}"
-
-  echo getThreadId()
 
 # vim: et:ts=2:sw=2:fdm=marker
 #
