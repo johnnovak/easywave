@@ -390,17 +390,7 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
       setFilePos(wr.file, subChunkSize.int64, fspCur)
 
 
-proc openWaveFile*(filename: string, bufSize: Natural = 4096): WaveReader =
-  var wr: WaveReader
-  if not open(wr.file, filename, fmRead):
-    raise newException(WaveReaderError, fmt"Error opening file for reading")
-
-  wr.filename = filename
-  wr.chunks = newSeq[WaveChunkInfo]()
-
-  when system.cpuEndian == bigEndian:
-    wr.readBuffer = newSeq[uint8](bufSize)
-
+proc readWaveHeader(wr: var WaveReader) =
   if wr.readFourCC() != FOURCC_RIFF:
     raise newException(WaveReaderError,
                        fmt"Not a WAVE file ('{FOURCC_RIFF}' chunk not found)")
@@ -412,6 +402,19 @@ proc openWaveFile*(filename: string, bufSize: Natural = 4096): WaveReader =
                        "Not a WAVE file ('{FOURCC_WAVE}' chunk not found)")
 
   wr.nextChunkPos = FOURCC_SIZE + CHUNK_HEADER_SIZE
+
+
+proc openWaveFile*(filename: string, bufSize: Natural = 4096): WaveReader =
+  var wr: WaveReader
+  if not open(wr.file, filename, fmRead):
+    raise newException(WaveReaderError, fmt"Error opening file for reading")
+
+  wr.filename = filename
+  wr.chunks = newSeq[WaveChunkInfo]()
+
+  wr.readBuffer = newSeq[uint8](bufSize)
+
+  wr.readWaveHeader()
   result = wr
 
 
@@ -600,7 +603,7 @@ proc writeData16*(ww: var WaveWriter, data: pointer, len: Natural) =
   when system.cpuEndian == bigEndian:
     let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
     var
-      src = cast[ptr UncheckedArray[int8]](data)
+      src = cast[ptr UncheckedArray[uint8]](data)
       pos = 0
       destPos = 0
 
@@ -625,6 +628,79 @@ proc writeData*(ww: var WaveWriter, data: var openArray[int16|uint16]) =
   ww.writeData16(data[0].addr, data.len * 2)
 
 
+# 24-bit
+
+proc writeData24Packed*(ww: var WaveWriter, data: pointer, len: Natural) =
+  const WIDTH = 3
+  assert len mod WIDTH == 0
+
+  when system.cpuEndian == bigEndian:
+    let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
+    var
+      src = cast[ptr UncheckedArray[uint8]](data)
+      pos = 0
+      destPos = 0
+
+    while pos < len:
+      ww.writeBuffer[destPos]   = src[pos+2]
+      ww.writeBuffer[destPos+1] = src[pos+1]
+      ww.writeBuffer[destPos+2] = src[pos]
+
+      inc(destPos, WIDTH)
+      inc(pos, WIDTH)
+      if destPos >= writeBufferSize:
+        ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
+        destPos = 0
+
+    if destPos > 0:
+      ww.writeBuf(ww.writeBuffer[0].addr, destPos)
+  else:
+    ww.writeBuf(data, len)
+
+proc writeData24Packed*(ww: var WaveWriter,
+                        data: var openArray[int8|uint8], len: Natural) =
+  ww.writeData24Packed(data[0].addr, len)
+
+proc writeData24Packed*(ww: var WaveWriter, data: var openArray[int8|uint8]) =
+  ww.writeData24Packed(data[0].addr, data.len)
+
+
+proc writeData24From32*(ww: var WaveWriter, data: pointer, len: Natural) =
+  assert len mod 4 == 0
+
+  let writeBufferSize = (ww.writeBuffer.len div 3) * 3
+  var
+    src = cast[ptr UncheckedArray[uint8]](data)
+    pos = 0
+    destPos = 0
+
+  while pos < len:
+    when system.cpuEndian == littleEndian:
+      ww.writeBuffer[destPos]   = src[pos+2]
+      ww.writeBuffer[destPos+1] = src[pos+1]
+      ww.writeBuffer[destPos+2] = src[pos]
+    else:
+      ww.writeBuffer[destPos]   = src[pos]
+      ww.writeBuffer[destPos+1] = src[pos+1]
+      ww.writeBuffer[destPos+2] = src[pos+2]
+
+    inc(destPos, 3)
+    inc(pos, 4)
+    if destPos >= writeBufferSize:
+      ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
+      destPos = 0
+
+  if destPos > 0:
+    ww.writeBuf(ww.writeBuffer[0].addr, destPos)
+
+proc writeData24From32*(ww: var WaveWriter,
+                        data: var openArray[int32], len: Natural) =
+  ww.writeData24From32(data[0].addr, len * 4)
+
+proc writeData24From32*(ww: var WaveWriter, data: var openArray[int32]) =
+  ww.writeData24From32(data[0].addr, data.len * 4)
+
+
 # 32-bit
 
 proc writeData32*(ww: var WaveWriter, data: pointer, len: Natural) =
@@ -634,7 +710,7 @@ proc writeData32*(ww: var WaveWriter, data: pointer, len: Natural) =
   when system.cpuEndian == bigEndian:
     let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
     var
-      src = cast[ptr UncheckedArray[int8]](data)
+      src = cast[ptr UncheckedArray[uint8]](data)
       pos = 0
       destPos = 0
 
@@ -668,7 +744,7 @@ proc writeData64*(ww: var WaveWriter, data: pointer, len: Natural) =
   when system.cpuEndian == bigEndian:
     let writeBufferSize = (ww.writeBuf.len div WIDTH) * WIDTH
     var
-      src = cast[ptr UncheckedArray[int8]](data)
+      src = cast[ptr UncheckedArray[uint8]](data)
       pos = 0
       destPos = 0
 
@@ -736,8 +812,7 @@ proc writeWaveFile*(filename: string, format: WaveFormat, sampleRate: Natural,
   if not open(ww.file, ww.filename, fmWrite):
     raise newException(WaveWriterError, "Error opening file for writing")
 
-  when system.cpuEndian == bigEndian:
-    ww.writeBuffer = newSeq[uint8](bufSize)
+  ww.writeBuffer = newSeq[uint8](bufSize)
 
   ww.format = format
   ww.sampleRate = sampleRate
