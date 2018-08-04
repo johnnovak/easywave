@@ -464,9 +464,8 @@ type
     regions:      OrderedTable[uint32, WaveRegion]
 
     writeBuffer:  seq[uint8]
-    dataLen:      int64
-    chunkSizePos: int64
-    chunkStarted: bool
+    chunkSize:    seq[int64]
+    chunkSizePos: seq[int64]
     fileClosed:   bool
 
   WaveWriterError* = object of Exception
@@ -479,12 +478,7 @@ proc numChannels*(ww: WaveWriter): Natural = ww.numChannels
 proc regions*(ww: WaveWriter): OrderedTable[uint32, WaveRegion] = ww.regions
 
 proc checkFileClosed(ww: WaveWriter) =
-  if ww.fileClosed:
-    raise newException(WaveReaderError, "File closed")
-
-proc checkChunkStarted(ww: WaveWriter) =
-  if not ww.chunkStarted:
-    raise newException(WaveReaderError, "Chunk not started")
+  if ww.fileClosed: raise newException(WaveReaderError, "File closed")
 
 proc raiseWaveWriteError() {.noreturn.} =
   raise newException(WaveWriterError, "Error writing file")
@@ -493,7 +487,8 @@ proc writeBuf(ww: var WaveWriter, data: pointer, len: Natural) =
   ww.checkFileClosed()
   if writeBuffer(ww.file, data, len) != len:
     raiseWaveWriteError()
-  inc(ww.dataLen, len)
+  if ww.chunkSize.len > 0:
+    inc(ww.chunkSize[ww.chunkSize.high], len)
 
 # {{{ Single-value write
 
@@ -676,13 +671,13 @@ proc writeData24From32*(ww: var WaveWriter, data: pointer, len: Natural) =
 
   while pos < len:
     when system.cpuEndian == littleEndian:
-      ww.writeBuffer[destPos]   = src[pos+2]
-      ww.writeBuffer[destPos+1] = src[pos+1]
-      ww.writeBuffer[destPos+2] = src[pos]
-    else:
       ww.writeBuffer[destPos]   = src[pos]
       ww.writeBuffer[destPos+1] = src[pos+1]
       ww.writeBuffer[destPos+2] = src[pos+2]
+    else:
+      ww.writeBuffer[destPos]   = src[pos+2]
+      ww.writeBuffer[destPos+1] = src[pos+1]
+      ww.writeBuffer[destPos+2] = src[pos]
 
     inc(destPos, 3)
     inc(pos, 4)
@@ -772,36 +767,30 @@ proc writeData*(ww: var WaveWriter, data: var openArray[int64|uint64|float64]) =
 
 proc startChunk*(ww: var WaveWriter, id: string) =
   ww.checkFileClosed()
-  if ww.chunkStarted:
-    raise newException(WaveReaderError,
-      "Chunk already started; writing nested chunks is not supported")
 
+  ww.chunkSize.add(0)
   ww.writeFourCC(id)
-  ww.chunkSizePos = getFilePos(ww.file)
+  ww.chunkSizePos.add(getFilePos(ww.file))
   ww.writeUInt32(0)  # to be updated later
-  ww.dataLen = 0
-  ww.chunkStarted = true
+  ww.chunkSize[ww.chunkSize.high] = 0  # the first 8 bytes shouldn't be counted
 
 
 proc endChunk*(ww: var WaveWriter) =
   ww.checkFileClosed()
-  ww.checkChunkStarted()
 
-  let fp = getFilePos(ww.file)
-  let dataLen = ww.dataLen
-  if dataLen mod 2 > 0:
-    ww.writeInt8(0) # chunks must contain even number of bytes
-  setFilePos(ww.file, ww.chunkSizePos)
-  ww.writeUInt32(dataLen.uint32)
-  setFilePos(ww.file, fp)
-  ww.dataLen = 0
-  ww.chunkStarted = false
+  var chunkSize = ww.chunkSize.pop()
+  if chunkSize mod 2 > 0:
+    ww.writeInt8(0)  # chunks must contain even number of bytes
+  setFilePos(ww.file, ww.chunkSizePos.pop())
+  ww.writeUInt32(chunkSize.uint32)
+  setFilePos(ww.file, 0, fspEnd)
 
+  # Add real chunk size to the parent chunk size
+  if ww.chunkSize.len > 0:
+    if chunkSize mod 2 > 0:
+      inc(chunkSize)
+    ww.chunkSize[ww.chunkSize.high] += chunkSize + CHUNK_HEADER_SIZE
 
-proc writeWaveHeader(ww: var WaveWriter) =
-  ww.writeFourCC(FOURCC_RIFF)
-  ww.writeUint32(0)  # to be updated later
-  ww.writeFourCC(FOURCC_WAVE)
 
 proc writeWaveFile*(filename: string, format: WaveFormat, sampleRate: Natural,
                     numChannels: Natural,
@@ -812,13 +801,16 @@ proc writeWaveFile*(filename: string, format: WaveFormat, sampleRate: Natural,
   if not open(ww.file, ww.filename, fmWrite):
     raise newException(WaveWriterError, "Error opening file for writing")
 
-  ww.writeBuffer = newSeq[uint8](bufSize)
-
   ww.format = format
   ww.sampleRate = sampleRate
   ww.numChannels = numChannels
 
-  ww.writeWaveHeader()
+  ww.chunkSize = newSeq[int64]()
+  ww.chunkSizePos = newSeq[int64]()
+  ww.writeBuffer = newSeq[uint8](bufSize)
+
+  ww.startChunk(FOURCC_RIFF)
+  ww.writeFourCC(FOURCC_WAVE)
   result = ww
 
 
@@ -855,13 +847,8 @@ proc startDataChunk*(ww: var WaveWriter) =
 
 proc endFile*(ww: var WaveWriter) =
   ww.checkFileClosed()
-  if ww.chunkStarted:
-    ww.endChunk()
 
-  setFilePos(ww.file, 4)
-  let size = getFileSize(ww.file) - CHUNK_HEADER_SIZE
-  ww.writeUInt32(size.uint32)
-
+  ww.endChunk()
   close(ww.file)
   ww.fileClosed = true
 

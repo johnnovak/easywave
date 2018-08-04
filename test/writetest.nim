@@ -114,12 +114,12 @@ proc write24BitTestFile(outfile: string) =
     phase += phaseInc
     inc(pos, 2)
     if pos >= buf.len:
-      ww.writeData24From32(buf[0].addr, buf.len * 4)
+      ww.writeData24From32(buf)
       pos = 0
     dec(totalFrames)
 
   if pos > 0:
-    ww.writeData24From32(buf[0].addr, pos * 4)
+    ww.writeData24From32(buf, pos)
 
   ww.endChunk()
 
