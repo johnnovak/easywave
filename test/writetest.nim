@@ -74,18 +74,64 @@ proc write16BitTestFile(outfile: string) =
     phase += phaseInc
     inc(pos, 2)
     if pos >= buf.len:
-      ww.writeDataLE(buf)
+      ww.writeData(buf)
       pos = 0
     dec(totalFrames)
 
   if pos > 0:
-    ww.writeDataLE(buf, pos)
+    ww.writeData(buf, pos)
 
   ww.endChunk()
 
   # Must call this to update the master RIFF chunk size
   ww.endFile()
 
+# }}}
+# {{{ write24BitTestFile
+
+#[
+proc write24BitTestFile(outfile: string) =
+  var ww = writeWaveFile(outfile, wf16BitInteger, SAMPLE_RATE, NUM_CHANNELS)
+
+  # The format chunk must be written before the data chunk
+  ww.writeFormatChunk()
+
+  # Write a 1-second long stereo sine wave
+  ww.startDataChunk()
+
+  let amplitude = 2^23 / 4
+  var
+    totalFrames = LENGTH_SECONDS * SAMPLE_RATE  # 1 frame = 2 samples (stereo)
+    buf: array[256*6, uint8]  # must be divisible by 6!
+    pos = 0
+    phase = 0.0
+    phaseInc = 2*PI / (SAMPLE_RATE/FREQ)
+
+  while totalFrames > 0:
+    let s = (sin(phase) * amplitude).int32
+    buf[pos]   =  s         and 0xff
+    buf[pos+1] = (s shr  8) and 0xff
+    buf[pos+2] = (s shr 16) and 0xff
+
+    buf[pos+3] =  s         and 0xff
+    buf[pos+4] = (s shr  8) and 0xff
+    buf[pos+5] = (s shr 16) and 0xff
+
+    phase += phaseInc
+    inc(pos, 6)
+    if pos >= buf.len:
+      ww.writeData24Packed(buf)
+      pos = 0
+    dec(totalFrames)
+
+  if pos > 0:
+    ww.writeData24Packed(buf, pos)
+
+  ww.endChunk()
+
+  # Must call this to update the master RIFF chunk size
+  ww.endFile()
+]#
 # }}}
 # {{{ write32BitTestFile
 
@@ -114,12 +160,12 @@ proc write32BitTestFile(outfile: string) =
     phase += phaseInc
     inc(pos, 2)
     if pos >= buf.len:
-      ww.writeDataLE(buf)
+      ww.writeData(buf)
       pos = 0
     dec(totalFrames)
 
   if pos > 0:
-    ww.writeDataLE(buf, pos)
+    ww.writeData(buf, pos)
 
   ww.endChunk()
 
@@ -154,12 +200,12 @@ proc write32BitFloatTestFile(outfile: string) =
     phase += phaseInc
     inc(pos, 2)
     if pos >= buf.len:
-      ww.writeDataLE(buf)
+      ww.writeData(buf)
       pos = 0
     dec(totalFrames)
 
   if pos > 0:
-    ww.writeDataLE(buf, pos)
+    ww.writeData(buf, pos)
 
   ww.endChunk()
 
@@ -194,12 +240,12 @@ proc write64BitFloatTestFile(outfile: string) =
     phase += phaseInc
     inc(pos, 2)
     if pos >= buf.len:
-      ww.writeDataLE(buf)
+      ww.writeData(buf)
       pos = 0
     dec(totalFrames)
 
   if pos > 0:
-    ww.writeDataLE(buf, pos)
+    ww.writeData(buf, pos)
 
   ww.endChunk()
 
