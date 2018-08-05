@@ -258,13 +258,13 @@ proc write64BitFloatTestFile(outfile: string, endianness: Endianness) =
 
 # }}}
 
-#write8BitTestFile("writetest-8bit-LE.wav", littleEndian)
-#write16BitTestFile("writetest-16bit-LE.wav", littleEndian)
-#write24BitUnpackedTestFile("writetest-24bit-unpacked-LE.wav", littleEndian)
-#write24BitPackedTestFile("writetest-24bit-packed-LE.wav", littleEndian)
-#write32BitTestFile("writetest-32bit-LE.wav", littleEndian)
-#write32BitFloatTestFile("writetest-32bit-float-LE.wav", littleEndian)
-#write64BitFloatTestFile("writetest-64bit-float-LE.wav", littleEndian)
+write8BitTestFile("writetest-8bit-LE.wav", littleEndian)
+write16BitTestFile("writetest-16bit-LE.wav", littleEndian)
+write24BitUnpackedTestFile("writetest-24bit-unpacked-LE.wav", littleEndian)
+write24BitPackedTestFile("writetest-24bit-packed-LE.wav", littleEndian)
+write32BitTestFile("writetest-32bit-LE.wav", littleEndian)
+write32BitFloatTestFile("writetest-32bit-float-LE.wav", littleEndian)
+write64BitFloatTestFile("writetest-64bit-float-LE.wav", littleEndian)
 
 write8BitTestFile("writetest-8bit-BE.wav", bigEndian)
 write16BitTestFile("writetest-16bit-BE.wav", bigEndian)
