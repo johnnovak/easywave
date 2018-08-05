@@ -427,6 +427,7 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
   # Build chunk list
   while wr.hasNextChunk():
     var ci = wr.nextChunk()
+    echo ci
     wr.chunks.add(ci)
     if ci.id == FOURCC_FORMAT:
       wr.readFormatChunk()
@@ -457,27 +458,34 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
 #
 type
   WaveWriter* = object
-    filename:     string
-    file:         File
-    format:       WaveFormat
-    sampleRate:   Natural
-    numChannels:  Natural
-    regions:      OrderedTable[uint32, WaveRegion]
+    filename:       string
+    file:           File
+    format:         WaveFormat
+    sampleRate:     Natural
+    numChannels:    Natural
+    regions:        OrderedTable[uint32, WaveRegion]
 
-    writeBuffer:  seq[uint8]
-    chunkSize:    seq[int64]
-    chunkSizePos: seq[int64]
-    endianness:   Endianness
-    swapEndian:   bool
+    writeBuffer:    seq[uint8]
+    chunkSize:      seq[int64]
+    chunkSizePos:   seq[int64]
+    trackChunkSize: bool
+    endianness:     Endianness
+    swapEndian:     bool
 
   WaveWriterError* = object of Exception
 
 
-proc filename*(ww: WaveWriter): string = ww.filename
-proc format*(ww: WaveWriter): WaveFormat = ww.format
-proc sampleRate*(ww: WaveWriter): Natural = ww.sampleRate
-proc numChannels*(ww: WaveWriter): Natural = ww.numChannels
-proc regions*(ww: WaveWriter): OrderedTable[uint32, WaveRegion] = ww.regions
+proc filename*(ww: WaveWriter): string {.inline.} = ww.filename
+proc format*(ww: WaveWriter): WaveFormat {.inline.} = ww.format
+proc sampleRate*(ww: WaveWriter): Natural {.inline.} = ww.sampleRate
+proc numChannels*(ww: WaveWriter): Natural {.inline.} = ww.numChannels
+
+proc `regions=`*(ww: var WaveWriter,
+                 regions: OrderedTable[uint32, WaveRegion]) {.inline.} =
+  ww.regions = regions
+
+proc regions*(ww: WaveWriter): OrderedTable[uint32, WaveRegion] {.inline.} =
+  ww.regions
 
 proc checkFileClosed(ww: WaveWriter) =
   if ww.file == nil: raise newException(WaveReaderError, "File closed")
@@ -489,7 +497,7 @@ proc writeBuf(ww: var WaveWriter, data: pointer, len: Natural) =
   ww.checkFileClosed()
   if writeBuffer(ww.file, data, len) != len:
     raiseWaveWriteError()
-  if ww.chunkSize.len > 0:
+  if ww.trackChunkSize and ww.chunkSize.len > 0:
     inc(ww.chunkSize[ww.chunkSize.high], len)
 
 # {{{ Single-value write
@@ -497,6 +505,10 @@ proc writeBuf(ww: var WaveWriter, data: pointer, len: Natural) =
 proc writeFourCC*(ww: var WaveWriter, fourCC: string) =
   var buf = fourCC
   ww.writeBuf(buf[0].addr, 4)
+
+proc writeString*(ww: var WaveWriter, s: string) =
+  var buf = s
+  ww.writeBuf(buf[0].addr, s.len)
 
 proc writeInt8*(ww: var WaveWriter, d: int8) =
   var dest = d
@@ -770,28 +782,35 @@ proc writeData*(ww: var WaveWriter, data: var openArray[int64|uint64|float64]) =
 proc startChunk*(ww: var WaveWriter, id: string) =
   ww.checkFileClosed()
 
-  ww.chunkSize.add(0)
+  ww.trackChunkSize = false
+
   ww.writeFourCC(id)
   ww.chunkSizePos.add(getFilePos(ww.file))
-  ww.writeUInt32(0)  # to be updated later
-  ww.chunkSize[ww.chunkSize.high] = 0  # the first 8 bytes shouldn't be counted
+  ww.writeUInt32(0)  # endChunk() will update this with the correct value
+  ww.chunkSize.add(0)
+
+  ww.trackChunkSize = true
 
 
 proc endChunk*(ww: var WaveWriter) =
   ww.checkFileClosed()
 
+  ww.trackChunkSize = false
+
   var chunkSize = ww.chunkSize.pop()
   if chunkSize mod 2 > 0:
-    ww.writeInt8(0)  # chunks must contain even number of bytes
+    ww.writeInt8(0)  # padding byte (chunks must contain even number of bytes)
   setFilePos(ww.file, ww.chunkSizePos.pop())
   ww.writeUInt32(chunkSize.uint32)
   setFilePos(ww.file, 0, fspEnd)
 
-  # Add real chunk size to the parent chunk size
+  # Add real (potentially padded) chunk size to the parent chunk size
   if ww.chunkSize.len > 0:
     if chunkSize mod 2 > 0:
       inc(chunkSize)
     ww.chunkSize[ww.chunkSize.high] += chunkSize + CHUNK_HEADER_SIZE
+
+  ww.trackChunkSize = true
 
 
 proc writeWaveFile*(filename: string, format: WaveFormat, sampleRate: Natural,
@@ -809,6 +828,7 @@ proc writeWaveFile*(filename: string, format: WaveFormat, sampleRate: Natural,
 
   ww.chunkSize = newSeq[int64]()
   ww.chunkSizePos = newSeq[int64]()
+  ww.trackChunkSize = false
   ww.writeBuffer = newSeq[uint8](bufSize)
   ww.endianness = endianness
   ww.swapEndian = cpuEndian != endianness
@@ -845,6 +865,41 @@ proc writeFormatChunk*(ww: var WaveWriter) =
   ww.writeUInt16(blockAlign)
   ww.writeUInt16(bitsPerSample)
   # TODO write extended header for float formats (and for 24 bit?)
+
+  ww.endChunk()
+
+
+proc writeCueChunk*(ww: var WaveWriter) =
+  ww.startChunk(FOURCC_CUE)
+  ww.writeUInt32(ww.regions.len.uint32)
+
+  for id, region in ww.regions.pairs():
+    ww.writeUInt32(id)          # cuePointId
+    ww.writeUInt32(0)           # position (unused if dataChunkId is 'data')
+    ww.writeFourCC(FOURCC_DATA) # dataChunkId
+    ww.writeUInt32(0)           # chunkStart (unused if dataChunkId is 'data')
+    ww.writeUInt32(0)           # blockStart (unused if dataChunkId is 'data')
+    ww.writeUInt32(region.startOffset) # sampleOffset
+
+  ww.endChunk()
+
+
+proc writeListChunk*(ww: var WaveWriter) =
+  ww.startChunk(FOURCC_LIST)
+
+  for id, region in ww.regions.pairs():
+    ww.startChunk(FOURCC_LABEL)
+    ww.writeUInt32(id)            # cuePointId
+    ww.writeString(region.label)  # text
+    ww.endChunk()
+
+  for id, region in ww.regions.pairs():
+    if region.endOffset > 0'u32:
+      ww.startChunk(FOURCC_LABELED_TEXT)
+      ww.writeUInt32(id)                # cuePointId
+      ww.writeUInt32(region.endOffset)  # sampleLength
+      ww.writeFourCC(FOURCC_REGION)     # purposeId
+      ww.endChunk()
 
   ww.endChunk()
 
