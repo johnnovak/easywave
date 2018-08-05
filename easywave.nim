@@ -15,6 +15,7 @@ const
   FOURCC_DATA         = "data"
   FOURCC_CUE          = "cue "
   FOURCC_LIST         = "LIST"
+  FOURCC_ASSOC_DATA   = "adtl"
   FOURCC_LABEL        = "labl"
   FOURCC_LABELED_TEXT = "ltxt"
   FOURCC_REGION       = "rgn "
@@ -38,7 +39,7 @@ type
 
   WaveRegion* = object
     startOffset*: uint32
-    endOffset*:   uint32
+    length*:      uint32
     label*:       string
 
 # }}}
@@ -237,7 +238,6 @@ proc readData*(wr: var WaveReader,
 
 proc isOdd(n: SomeNumber): bool = n mod 2 == 1
 
-
 proc hasNextChunk*(wr: var WaveReader): bool =
   result = wr.nextChunkPos < CHUNK_HEADER_SIZE + wr.riffChunkSize.int64
 
@@ -362,6 +362,10 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
       if regions.hasKey(cuePointId):
         regions[cuePointId].label = text
 
+      echo fmt"{FOURCC_LABEL} chunk:"
+      echo fmt"  cuePointId: {cuePointId}"
+      echo fmt"  text: {text}"
+
       setFilePos(wr.file, 1, fspCur)  # skip terminating zero
       if isOdd(textSize):
         inc(textSize)
@@ -376,8 +380,12 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
 
       if purposeId == FOURCC_REGION:
         if regions.hasKey(cuePointId):
-          regions[cuePointId].endOffset =
-            regions[cuePointId].startOffset + sampleLength
+          regions[cuePointId].length = sampleLength
+
+      echo fmt"{FOURCC_LABELED_TEXT} chunk:"
+      echo fmt"  cuePointId: {cuePointId}"
+      echo fmt"  sampleLength: {sampleLength}"
+      echo fmt"  purposeId: {purposeId}"
 
       if isOdd(subChunkSize):
         inc(subChunkSize)
@@ -886,19 +894,21 @@ proc writeCueChunk*(ww: var WaveWriter) =
 
 proc writeListChunk*(ww: var WaveWriter) =
   ww.startChunk(FOURCC_LIST)
+  ww.writeFourCC(FOURCC_ASSOC_DATA)
 
   for id, region in ww.regions.pairs():
     ww.startChunk(FOURCC_LABEL)
     ww.writeUInt32(id)            # cuePointId
     ww.writeString(region.label)  # text
+    ww.writeUInt8(0)              # null terminator
     ww.endChunk()
 
   for id, region in ww.regions.pairs():
-    if region.endOffset > 0'u32:
+    if region.length > 0'u32:
       ww.startChunk(FOURCC_LABELED_TEXT)
-      ww.writeUInt32(id)                # cuePointId
-      ww.writeUInt32(region.endOffset)  # sampleLength
-      ww.writeFourCC(FOURCC_REGION)     # purposeId
+      ww.writeUInt32(id)             # cuePointId
+      ww.writeUInt32(region.length)  # sampleLength
+      ww.writeFourCC(FOURCC_REGION)  # purposeId
       ww.endChunk()
 
   ww.endChunk()
