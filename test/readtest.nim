@@ -8,9 +8,10 @@ if paramCount() == 0:
 var infile = paramStr(1)
 var wr = parseWaveFile(infile, readRegions = true)
 
-echo fmt"Format:     {wr.format}"
-echo fmt"Samplerate: {wr.sampleRate}"
-echo fmt"Channels:   {wr.numChannels}"
+echo fmt"Endinanness: {wr.endianness}"
+echo fmt"Format:      {wr.format}"
+echo fmt"Samplerate:  {wr.sampleRate}"
+echo fmt"Channels:    {wr.numChannels}"
 
 echo "\nChunks:"
 for ci in wr.chunks:

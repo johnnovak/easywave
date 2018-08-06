@@ -49,24 +49,30 @@ type
   WaveReader* = object
     filename:      string
     file:          File
-    riffChunkSize: uint32
+    endianness:    Endianness
     format:        WaveFormat
     sampleRate:    Natural
     numChannels:   Natural
-    nextChunkPos:  int64
     chunks:        seq[WaveChunkInfo]
     regions:       OrderedTable[uint32, WaveRegion]
+
     readBuffer:    seq[uint8]
+    riffChunkSize: uint32  # TODO use filesize instead?
+    nextChunkPos:  int64
+    swapEndian:    bool
 
 type WaveReaderError* = object of Exception
 
-proc filename*(wr: WaveReader): string = wr.filename
-proc file*(wr: WaveReader): File = wr.file
-proc format*(wr: WaveReader): WaveFormat = wr.format
-proc sampleRate*(wr: WaveReader): Natural = wr.sampleRate
-proc numChannels*(wr: WaveReader): Natural = wr.numChannels
-proc chunks*(wr: WaveReader): seq[WaveChunkInfo] = wr.chunks
-proc regions*(wr: WaveReader): OrderedTable[uint32, WaveRegion] = wr.regions
+proc filename*(wr: WaveReader): string {.inline.} = wr.filename
+proc file*(wr: WaveReader): File{.inline.}  = wr.file
+proc endianness*(wr: WaveReader): Endianness {.inline.} = wr.endianness
+proc format*(wr: WaveReader): WaveFormat {.inline.} = wr.format
+proc sampleRate*(wr: WaveReader): Natural {.inline.} = wr.sampleRate
+proc numChannels*(wr: WaveReader): Natural {.inline.} = wr.numChannels
+proc chunks*(wr: WaveReader): seq[WaveChunkInfo] {.inline.} = wr.chunks
+
+proc regions*(wr: WaveReader): OrderedTable[uint32, WaveRegion] {.inline.} =
+  wr.regions
 
 
 proc raiseWaveReadError() {.noreturn.} =
@@ -86,7 +92,7 @@ proc readInt8*(wr: WaveReader): int8 =
   wr.readBuf(result.addr, 1)
 
 proc readInt16*(wr: WaveReader): int16 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: int16
     wr.readBuf(buf.addr, 2)
     swapEndian16(result.addr, buf.addr)
@@ -95,7 +101,7 @@ proc readInt16*(wr: WaveReader): int16 =
 
 
 proc readInt32*(wr: WaveReader): int32 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: int32
     wr.readBuf(buf.addr, 4)
     swapEndian32(result.addr, buf.addr)
@@ -103,7 +109,7 @@ proc readInt32*(wr: WaveReader): int32 =
     wr.readBuf(result.addr, 4)
 
 proc readInt64*(wr: WaveReader): int64 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: int64
     wr.readBuf(buf.addr, 8)
     swapEndian64(result.addr, buf.addr)
@@ -114,7 +120,7 @@ proc readUInt8*(wr: WaveReader): uint8 =
   wr.readBuf(result.addr, 1)
 
 proc readUInt16*(wr: WaveReader): uint16 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: uint16
     wr.readBuf(buf.addr, 2)
     swapEndian16(result.addr, buf.addr)
@@ -122,7 +128,7 @@ proc readUInt16*(wr: WaveReader): uint16 =
     wr.readBuf(result.addr, 2)
 
 proc readUInt32*(wr: WaveReader): uint32 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: uint32
     wr.readBuf(buf.addr, 4)
     swapEndian32(result.addr, buf.addr)
@@ -130,7 +136,7 @@ proc readUInt32*(wr: WaveReader): uint32 =
     wr.readBuf(result.addr, 4)
 
 proc readUInt64*(wr: WaveReader): uint64 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: uint64
     wr.readBuf(buf.addr, 8)
     swapEndian64(result.addr, buf.addr)
@@ -138,7 +144,7 @@ proc readUInt64*(wr: WaveReader): uint64 =
     wr.readBuf(result.addr, 8)
 
 proc readFloat32*(wr: WaveReader): float32 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: float32
     wr.readBuf(buf.addr, 4)
     swapEndian32(result.addr, buf.addr)
@@ -146,7 +152,7 @@ proc readFloat32*(wr: WaveReader): float32 =
     wr.readBuf(result.addr, 4)
 
 proc readFloat64*(wr: WaveReader): float64 =
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var buf: float64
     wr.readBuf(buf.addr, 8)
     swapEndian64(result.addr, buf.addr)
@@ -164,7 +170,7 @@ proc readData*(wr: var WaveReader,
 proc readData*(wr: var WaveReader,
                dest: var openArray[int16|uint16], len: Natural) =
   const WIDTH = 2
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var
       bytesToRead = len * WIDTH
       readBufferSize = (wr.readBuffer.len div WIDTH) * WIDTH
@@ -186,7 +192,7 @@ proc readData*(wr: var WaveReader,
 proc readData*(wr: var WaveReader,
                dest: var openArray[int32|uint32|float32], len: Natural) =
   const WIDTH = 4
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var
       bytesToRead = len * WIDTH
       readBufferSize = (wr.readBuffer.len div WIDTH) * WIDTH
@@ -208,7 +214,7 @@ proc readData*(wr: var WaveReader,
 proc readData*(wr: var WaveReader,
                dest: var openArray[int64|uint64|float64], len: Natural) =
   const WIDTH = 8
-  when system.cpuEndian == bigEndian:
+  if wr.swapEndian:
     var
       bytesToRead = len * WIDTH
       readBufferSize = (wr.readBuffer.len div WIDTH) * WIDTH
@@ -362,10 +368,6 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
       if regions.hasKey(cuePointId):
         regions[cuePointId].label = text
 
-      echo fmt"{FOURCC_LABEL} chunk:"
-      echo fmt"  cuePointId: {cuePointId}"
-      echo fmt"  text: {text}"
-
       setFilePos(wr.file, 1, fspCur)  # skip terminating zero
       if isOdd(textSize):
         inc(textSize)
@@ -382,11 +384,6 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
         if regions.hasKey(cuePointId):
           regions[cuePointId].length = sampleLength
 
-      echo fmt"{FOURCC_LABELED_TEXT} chunk:"
-      echo fmt"  cuePointId: {cuePointId}"
-      echo fmt"  sampleLength: {sampleLength}"
-      echo fmt"  purposeId: {purposeId}"
-
       if isOdd(subChunkSize):
         inc(subChunkSize)
       inc(pos, CHUNK_HEADER_SIZE + subChunkSize.int)
@@ -400,9 +397,15 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
 
 
 proc readWaveHeader(wr: var WaveReader) =
-  if wr.readFourCC() != FOURCC_RIFF_LE:
-    raise newException(WaveReaderError,
-                       fmt"Not a WAVE file ('{FOURCC_RIFF_LE}' chunk not found)")
+  let id = wr.readFourCC()
+  case id
+  of FOURCC_RIFF_LE: wr.endianness = littleEndian
+  of FOURCC_RIFF_BE: wr.endianness = bigEndian
+  else:
+    raise newException(WaveReaderError, "Not a WAVE file " &
+                fmt"('{FOURCC_RIFF_LE}' or '{FOURCC_RIFF_BE}' chunk not found)")
+
+  wr.swapEndian = cpuEndian != wr.endianness
 
   wr.riffChunkSize = wr.readUInt32()
 
@@ -435,7 +438,6 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
   # Build chunk list
   while wr.hasNextChunk():
     var ci = wr.nextChunk()
-    echo ci
     wr.chunks.add(ci)
     if ci.id == FOURCC_FORMAT:
       wr.readFormatChunk()
@@ -467,23 +469,24 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
 type
   WaveWriter* = object
     filename:       string
-    file:           File
+    endianness:     Endianness
     format:         WaveFormat
     sampleRate:     Natural
     numChannels:    Natural
     regions:        OrderedTable[uint32, WaveRegion]
 
+    file:           File
     writeBuffer:    seq[uint8]
     chunkSize:      seq[int64]
     chunkSizePos:   seq[int64]
     trackChunkSize: bool
-    endianness:     Endianness
     swapEndian:     bool
 
   WaveWriterError* = object of Exception
 
 
 proc filename*(ww: WaveWriter): string {.inline.} = ww.filename
+proc endianness*(ww: WaveWriter): Endianness {.inline.} = ww.endianness
 proc format*(ww: WaveWriter): WaveFormat {.inline.} = ww.format
 proc sampleRate*(ww: WaveWriter): Natural {.inline.} = ww.sampleRate
 proc numChannels*(ww: WaveWriter): Natural {.inline.} = ww.numChannels
@@ -928,37 +931,5 @@ proc endFile*(ww: var WaveWriter) =
   ww.file = nil
 
 # }}}
-
-when isMainModule:
-  import os
-  var infile = paramStr(1)
-#[
-  var wr = openWaveFile(infile)
-
-  while wr.hasNextChunk():
-    var c = wr.nextChunk()
-    echo c
-    if c.id == FOURCC_FORMAT:
-      wr.readFormatChunk()
-
-  echo fmt"format: {wr.format}"
-  echo fmt"sampleRate: {wr.sampleRate}"
-  echo fmt"numChannels: {wr.numChannels}"
-  echo ""
-]#
-
-  var wr = parseWaveFile(infile, readRegions = true)
-
-  echo fmt"format: {wr.format}"
-  echo fmt"sampleRate: {wr.sampleRate}"
-  echo fmt"numChannels: {wr.numChannels}"
-
-  echo ""
-  for ci in wr.chunks:
-    echo ci
-
-  echo ""
-  for id, r in wr.regions.pairs:
-    echo fmt"id: {id}, {r}"
 
 # vim: et:ts=2:sw=2:fdm=marker
