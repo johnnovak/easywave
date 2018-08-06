@@ -38,9 +38,9 @@ type
     filePos*: int64
 
   WaveRegion* = object
-    startOffset*: uint32
-    length*:      uint32
-    label*:       string
+    startFrame*: uint32
+    length*:     uint32
+    label*:      string
 
 # }}}
 # {{{ Reader
@@ -332,7 +332,7 @@ proc readRegionIdsAndStartOffsetsFromCueChunk*(
         if not regions.hasKey(cuePointId):
           var wr: WaveRegion
           regions[cuePointId] = wr
-        regions[cuePointId].startOffset = sampleOffset
+        regions[cuePointId].startFrame = sampleOffset
 
 
 proc readRegionLabelsAndEndOffsetsFromListChunk*(
@@ -887,7 +887,7 @@ proc writeCueChunk*(ww: var WaveWriter) =
     ww.writeFourCC(FOURCC_DATA) # dataChunkId
     ww.writeUInt32(0)           # chunkStart (unused if dataChunkId is 'data')
     ww.writeUInt32(0)           # blockStart (unused if dataChunkId is 'data')
-    ww.writeUInt32(region.startOffset) # sampleOffset
+    ww.writeUInt32(region.startFrame) # sampleOffset
 
   ww.endChunk()
 
@@ -909,6 +909,10 @@ proc writeListChunk*(ww: var WaveWriter) =
       ww.writeUInt32(id)             # cuePointId
       ww.writeUInt32(region.length)  # sampleLength
       ww.writeFourCC(FOURCC_REGION)  # purposeId
+      ww.writeUInt16(0)              # country (ignored)
+      ww.writeUInt16(0)              # language (ignored)
+      ww.writeUInt16(0)              # dialect (ignored)
+      ww.writeUInt16(0)              # codePage (ignored)
       ww.endChunk()
 
   ww.endChunk()

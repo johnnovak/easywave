@@ -1,4 +1,4 @@
-import math, os, strformat
+import math, os, strformat, tables
 import easywave
 
 const
@@ -6,6 +6,15 @@ const
   NUM_CHANNELS = 2
   LENGTH_SECONDS = 1
   FREQ = 440  # A440 (standard pitch)
+
+proc setRegions(ww: var WaveWriter) =
+  ww.regions = {
+    1'u32: WaveRegion(startFrame:     0, length:     0, label: "marker1"),
+    2'u32: WaveRegion(startFrame:  1000, length:     0, label: "marker2"),
+    3'u32: WaveRegion(startFrame:  3000, length:     0, label: "marker3"),
+    4'u32: WaveRegion(startFrame: 10000, length:  5000, label: "region1"),
+    5'u32: WaveRegion(startFrame: 30000, length: 10000, label: "region2")
+  }.toOrderedTable
 
 # {{{ write8BitTestFile
 
@@ -39,6 +48,11 @@ proc write8BitTestFile(outfile: string, endianness: Endianness) =
     ww.writeData(buf, pos)
 
   ww.endChunk()
+
+  ww.setRegions()
+  ww.writeCueChunk()
+  ww.writeListChunk()
+
   ww.endFile()
 
 # }}}
@@ -74,6 +88,11 @@ proc write16BitTestFile(outfile: string, endianness: Endianness) =
     ww.writeData(buf, pos)
 
   ww.endChunk()
+
+  ww.setRegions()
+  ww.writeCueChunk()
+  ww.writeListChunk()
+
   ww.endFile()
 
 # }}}
@@ -109,6 +128,11 @@ proc write24BitUnpackedTestFile(outfile: string, endianness: Endianness) =
     ww.writeData24Unpacked(buf, pos)
 
   ww.endChunk()
+
+  ww.setRegions()
+  ww.writeCueChunk()
+  ww.writeListChunk()
+
   ww.endFile()
 
 # }}}
@@ -149,6 +173,11 @@ proc write24BitPackedTestFile(outfile: string, endianness: Endianness) =
     ww.writeData24Packed(buf, pos)
 
   ww.endChunk()
+
+  ww.setRegions()
+  ww.writeCueChunk()
+  ww.writeListChunk()
+
   ww.endFile()
 
 # }}}
@@ -184,6 +213,11 @@ proc write32BitTestFile(outfile: string, endianness: Endianness) =
     ww.writeData(buf, pos)
 
   ww.endChunk()
+
+  ww.setRegions()
+  ww.writeCueChunk()
+  ww.writeListChunk()
+
   ww.endFile()
 
 # }}}
@@ -219,6 +253,11 @@ proc write32BitFloatTestFile(outfile: string, endianness: Endianness) =
     ww.writeData(buf, pos)
 
   ww.endChunk()
+
+  ww.setRegions()
+  ww.writeCueChunk()
+  ww.writeListChunk()
+
   ww.endFile()
 
 # }}}
@@ -254,6 +293,11 @@ proc write64BitFloatTestFile(outfile: string, endianness: Endianness) =
     ww.writeData(buf, pos)
 
   ww.endChunk()
+
+  ww.setRegions()
+  ww.writeCueChunk()
+  ww.writeListChunk()
+
   ww.endFile()
 
 # }}}
