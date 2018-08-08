@@ -1,3 +1,8 @@
+## :Author: John Novak <john@johnnovak.net>
+##
+## 
+##
+
 import endians, strformat, tables
 
 export tables
@@ -8,23 +13,24 @@ const
   FOURCC_SIZE = 4
   CHUNK_HEADER_SIZE = 8
 
-  FOURCC_RIFF_LE      = "RIFF"
-  FOURCC_RIFF_BE      = "RIFX"
-  FOURCC_WAVE         = "WAVE"
-  FOURCC_FORMAT       = "fmt "
-  FOURCC_DATA         = "data"
-  FOURCC_CUE          = "cue "
-  FOURCC_LIST         = "LIST"
-  FOURCC_ASSOC_DATA   = "adtl"
-  FOURCC_LABEL        = "labl"
-  FOURCC_LABELED_TEXT = "ltxt"
-  FOURCC_REGION       = "rgn "
+  FOURCC_RIFF_LE*      = "RIFF"  ## RIFF ID (little endian)
+  FOURCC_RIFF_BE*      = "RIFX"  ## RIFF ID (big endian)
+  FOURCC_WAVE*         = "WAVE"  ## WAVE format ID
+  FOURCC_FORMAT*       = "fmt "  ## Format chunk ID
+  FOURCC_DATA*         = "data"  ## Data chunk ID
+  FOURCC_CUE*          = "cue "  ## Cue chunk ID
+  FOURCC_LIST*         = "LIST"  ## List chunk ID
+  FOURCC_ASSOC_DATA*   = "adtl"  ## Associated data list chunk ID
+  FOURCC_LABEL*        = "labl"  ## Label chunk ID
+  FOURCC_LABELED_TEXT* = "ltxt"  ## Labeled text chunk ID
+  FOURCC_REGION*       = "rgn "  ## Region chunk ID
 
   WAVE_FORMAT_PCM = 1
   WAVE_FORMAT_IEEE_FLOAT = 3
 
 type
   WaveFormat* = enum
+    ## supported WAVE formats (bit-depths)
     wf8BitInteger  = (0,  "8-bit integer"),
     wf16BitInteger = (1, "16-bit integer"),
     wf24BitInteger = (2, "24-bit integer"),
@@ -33,14 +39,16 @@ type
     wf64BitFloat   = (5, "64-bit IEEE float")
 
   WaveChunkInfo* = object
-    id*:      string
-    size*:    uint32
-    filePos*: int64
+    ## contains information about a chunk
+    id*:      string  ## 4-char chunk ID (FourCC)
+    size*:    uint32  ## size of chunk data in bytes
+    filePos*: int64   ## file position of the chunk
 
   WaveRegion* = object
-    startFrame*: uint32
-    length*:     uint32
-    label*:      string
+    ## represents a marker (if length is 0) or a region
+    startFrame*: uint32  ## start sample frame of the marker/region
+    length*:     uint32  ## length of the region in frames (0 for markers)
+    label*:      string  ## text label
 
 # }}}
 # {{{ Reader
@@ -63,16 +71,41 @@ type
 
 type WaveReaderError* = object of Exception
 
-proc filename*(wr: WaveReader): string {.inline.} = wr.filename
-proc file*(wr: WaveReader): File{.inline.}  = wr.file
-proc endianness*(wr: WaveReader): Endianness {.inline.} = wr.endianness
-proc format*(wr: WaveReader): WaveFormat {.inline.} = wr.format
-proc sampleRate*(wr: WaveReader): Natural {.inline.} = wr.sampleRate
-proc numChannels*(wr: WaveReader): Natural {.inline.} = wr.numChannels
-proc chunks*(wr: WaveReader): seq[WaveChunkInfo] {.inline.} = wr.chunks
+proc filename*(wr: WaveReader): string {.inline.} =
+  ## The filename of the WAVE file.
+  wr.filename
+
+proc file*(wr: WaveReader): File{.inline.} =
+  ## The file object to used to read the WAVE file data.
+  wr.file
+
+proc endianness*(wr: WaveReader): Endianness {.inline.} =
+  ## The endianness of the WAVE file.
+  wr.endianness
+
+proc format*(wr: WaveReader): WaveFormat {.inline.} =
+  ## The format (bit-depth) of the audio data (populated by ``parseWaveFile``
+  ## and ``readFormatChunk``).
+  wr.format
+
+proc sampleRate*(wr: WaveReader): Natural {.inline.} =
+  ## The sample rate of audio data (populated by ``parseWaveFile`` and
+  ## ``readFormatChunk``).
+  wr.sampleRate
+
+proc numChannels*(wr: WaveReader): Natural {.inline.} =
+  ## The number of channels stored in the audio data (populated by
+  ## ``parseWaveFile`` and ``readFormatChunk``).
+  wr.numChannels
+
+proc chunks*(wr: WaveReader): seq[WaveChunkInfo] {.inline.} =
+  ## A list containing info about the chunks found in the WAVE file (populated
+  ## by ``parseWaveFile`` and ``buildChunkList``).
+  wr.chunks
 
 proc regions*(wr: WaveReader): OrderedTable[uint32, WaveRegion] {.inline.} =
   wr.regions
+## Returns an ordered table of regions where the key is the region ID.
 
 
 proc raiseWaveReadError() {.noreturn.} =
@@ -85,13 +118,20 @@ template readBuf(wr: WaveReader, data: pointer, len: Natural) =
 # {{{ Single-value read
 
 proc readFourCC*(wr: WaveReader): string =
+  ## Reads a 4-byte FourCC as a string from the current file position. Raises
+  ## a ``WaveReadError`` on read errors.
   result = newString(4)
   wr.readBuf(result[0].addr, 4)
 
 proc readInt8*(wr: WaveReader): int8 =
+  ## Reads a single ``int8`` value from the current file position. Raises
+  ## a ``WaveReadError`` on read errors.
   wr.readBuf(result.addr, 1)
 
 proc readInt16*(wr: WaveReader): int16 =
+  ## Reads a single ``int16`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: int16
     wr.readBuf(buf.addr, 2)
@@ -99,8 +139,10 @@ proc readInt16*(wr: WaveReader): int16 =
   else:
     wr.readBuf(result.addr, 2)
 
-
 proc readInt32*(wr: WaveReader): int32 =
+  ## Reads a single ``int32`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: int32
     wr.readBuf(buf.addr, 4)
@@ -109,6 +151,9 @@ proc readInt32*(wr: WaveReader): int32 =
     wr.readBuf(result.addr, 4)
 
 proc readInt64*(wr: WaveReader): int64 =
+  ## Reads a single ``int64`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: int64
     wr.readBuf(buf.addr, 8)
@@ -117,9 +162,14 @@ proc readInt64*(wr: WaveReader): int64 =
     wr.readBuf(result.addr, 8)
 
 proc readUInt8*(wr: WaveReader): uint8 =
+  ## Reads a single ``uint8`` value from the current file position. Raises
+  ## a ``WaveReadError`` on read errors.
   wr.readBuf(result.addr, 1)
 
 proc readUInt16*(wr: WaveReader): uint16 =
+  ## Reads a single ``uint16`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: uint16
     wr.readBuf(buf.addr, 2)
@@ -128,6 +178,9 @@ proc readUInt16*(wr: WaveReader): uint16 =
     wr.readBuf(result.addr, 2)
 
 proc readUInt32*(wr: WaveReader): uint32 =
+  ## Reads a single ``uint32`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: uint32
     wr.readBuf(buf.addr, 4)
@@ -136,6 +189,9 @@ proc readUInt32*(wr: WaveReader): uint32 =
     wr.readBuf(result.addr, 4)
 
 proc readUInt64*(wr: WaveReader): uint64 =
+  ## Reads a single ``uint64`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: uint64
     wr.readBuf(buf.addr, 8)
@@ -144,6 +200,9 @@ proc readUInt64*(wr: WaveReader): uint64 =
     wr.readBuf(result.addr, 8)
 
 proc readFloat32*(wr: WaveReader): float32 =
+  ## Reads a single ``float32`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: float32
     wr.readBuf(buf.addr, 4)
@@ -152,6 +211,9 @@ proc readFloat32*(wr: WaveReader): float32 =
     wr.readBuf(result.addr, 4)
 
 proc readFloat64*(wr: WaveReader): float64 =
+  ## Reads a single ``float64`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
   if wr.swapEndian:
     var buf: float64
     wr.readBuf(buf.addr, 8)
@@ -164,11 +226,16 @@ proc readFloat64*(wr: WaveReader): float64 =
 
 proc readData*(wr: var WaveReader,
                dest: var openArray[int8|uint8], len: Natural) =
+  ## Reads `len` number of ``int8|uint8`` values into `dest` from the current
+  ## file position and performs endianness conversion if necessary. Raises
+  ## a ``WaveReadError`` on read errors.
   wr.readBuf(dest[0].addr, len)
-
 
 proc readData*(wr: var WaveReader,
                dest: var openArray[int16|uint16], len: Natural) =
+  ## Reads `len` number of ``int16|uint16`` values into `dest` from the
+  ## current file position and performs endianness conversion if necessary.
+  ## Raises a ``WaveReadError`` on read errors.
   const WIDTH = 2
   if wr.swapEndian:
     var
@@ -191,6 +258,9 @@ proc readData*(wr: var WaveReader,
 
 proc readData*(wr: var WaveReader,
                dest: var openArray[int32|uint32|float32], len: Natural) =
+  ## Reads `len` number of ``int32|uint32|float32`` values into `dest` from
+  ## the current file position and performs endianness conversion if
+  ## necessary. Raises a ``WaveReadError`` on read errors.
   const WIDTH = 4
   if wr.swapEndian:
     var
@@ -213,6 +283,9 @@ proc readData*(wr: var WaveReader,
 
 proc readData*(wr: var WaveReader,
                dest: var openArray[int64|uint64|float64], len: Natural) =
+  ## Reads `len` number of ``int64|uint64|float64`` values into `dest` from
+  ## the current file position and performs endianness conversion if
+  ## necessary.  Raises a ``WaveReadError`` on read errors.
   const WIDTH = 8
   if wr.swapEndian:
     var
@@ -234,10 +307,12 @@ proc readData*(wr: var WaveReader,
 
 
 proc readData*(wr: var WaveReader, data: var openArray[int8|uint8]) =
+  ## Shortcut to fill the whole `data` buffer with data.
   readData(wr, data, data.len)
 
 proc readData*(wr: var WaveReader,
                data: var openArray[int16|uint16|int32|uint32|int64|uint64|float32|float64]) =
+  ## Shortcut to fill the whole `data` buffer with data.
   readData(wr, data, data.len)
 
 # }}}
@@ -245,6 +320,8 @@ proc readData*(wr: var WaveReader,
 proc isOdd(n: SomeNumber): bool = n mod 2 == 1
 
 proc hasNextChunk*(wr: var WaveReader): bool =
+  ## Returns true iff the wave file has more chunks (to be used with
+  ## ``nextChunk``).
   result = wr.nextChunkPos < CHUNK_HEADER_SIZE + wr.riffChunkSize.int64
 
 proc setNextChunkPos(wr: var WaveReader, ci: WaveChunkInfo) =
@@ -253,6 +330,9 @@ proc setNextChunkPos(wr: var WaveReader, ci: WaveChunkInfo) =
     inc(wr.nextChunkPos)
 
 proc nextChunk*(wr: var WaveReader): WaveChunkInfo =
+  ## Finds the next chunk in the file; raises a ``WaveReadError`` if the end
+  ## of file has been reached. Returns chunk info and sets the file pointer to
+  ## the start of the chunk if successful.
   if wr.nextChunkPos >= CHUNK_HEADER_SIZE + wr.riffChunkSize.int64:
     raise newException(WaveReaderError,
                        "Cannot seek to next chunk, end of file reached")
@@ -271,6 +351,10 @@ proc nextChunk*(wr: var WaveReader): WaveChunkInfo =
 
 
 proc readFormatChunk*(wr: var WaveReader) =
+  ## Reads the format chunk from the current file position and sets the format
+  ## info in the ``WaveReader`` object on success. Raises
+  ## a ``WaveReaderError`` on any error (e.g. read error, chunk not found,
+  ## unsupported format etc.).
   let chunkId = wr.readFourCC()
   if chunkId != FOURCC_FORMAT:
     raise newException(WaveReaderError, fmt"'{FOURCC_FORMAT}' chunk not found")
@@ -417,6 +501,9 @@ proc readWaveHeader(wr: var WaveReader) =
 
 
 proc openWaveFile*(filename: string, bufSize: Natural = 4096): WaveReader =
+  ## Opens a WAVE file for reading but does not parse anything else than the
+  ## master RIFF header. Raises a ``WaveReaderError`` if the file is not
+  ## a valid WAVE file and on read errors.
   var wr: WaveReader
   if not open(wr.file, filename, fmRead):
     raise newException(WaveReaderError, fmt"Error opening file for reading")
@@ -430,17 +517,26 @@ proc openWaveFile*(filename: string, bufSize: Natural = 4096): WaveReader =
   result = wr
 
 
-proc parseWaveFile*(filename: string, readRegions: bool = false,
-                    bufSize: Natural = 4096): WaveReader =
-
-  var wr = openWaveFile(filename, bufSize)
-
-  # Build chunk list
+proc buildChunkList*(wr: var WaveReader) =
+  ## Finds all top-level chunks in the WAVE file and stores the result as
+  ## a list of ``ChunkInfo`` objects that can be accessed through the
+  ## ``chunks`` property. Raises a ``WaveReadError`` on read errors.
   while wr.hasNextChunk():
     var ci = wr.nextChunk()
     wr.chunks.add(ci)
     if ci.id == FOURCC_FORMAT:
       wr.readFormatChunk()
+
+
+proc parseWaveFile*(filename: string, readRegions: bool = false,
+                    bufSize: Natural = 4096): WaveReader =
+  ## Opens a WAVE file for reading, builds the chunk list, reads the format
+  ## chunk, reads the markers and regions if `readRegions` is true, then seeks
+  ## to the start of the data chunk. Raises a ``WaveReaderError`` if the file
+  ## is not a valid WAVE file and on read errors.
+  var wr = openWaveFile(filename, bufSize)
+
+  wr.buildChunkList()
 
   wr.regions = initOrderedTable[uint32, WaveRegion]()
   if readRegions:

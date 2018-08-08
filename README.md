@@ -81,15 +81,16 @@ Note this will only write the master RIFF header; you'll need to call
 gives the user the flexibility to optionally insert some other chunks before
 the format chunk.
 
-To start a new chunk, you'll need to call `startChunk("ABCD")`, where "ABCD"
-is a 4-char chunk ID (FourCC). You can also use `startDataChunk()` which is
-a shortcut for creating the data chunk. Then you can use the various `write*`
-methods to write some data into the chunk. Finally, you'll need to call
-`endChunk()` to close the chunk, which will update the chunk size in the
-chunk's header. Chunks can be nested, the library will update all parent chunk
-headers with the correctly calculated size values.
+To start a new chunk, you'll need to call `startChunk("ABCD")`, where `"ABCD"`
+is a 4-char chunk ID (FourCC). You can also use `startDataChunk()` shortcut
+for creating the data chunk. Then you can use the various `write*` methods to
+write some data into the chunk. Finally, you'll need to call `endChunk()` to
+close the chunk, which will pad the chunk to an even length if necessary and
+update the chunk size in the chunk's header.  Chunks can be nested, the
+library will update all parent chunk headers with the correctly calculated
+size values.
 
-```
+```nimrod
 ww.startChunk("LIST")
 
 ww.writeInt16(-442)
@@ -118,8 +119,8 @@ ww.writeCueChunk()
 ww.writeListChunk()
 ```
 
-Finally, the `endFile()` method must be called that updates the master RIFF
-chunk record with the correct size value and closes the file:
+Finally, the `endFile()` method must be called that will updates the master
+RIFF chunk with the correct chunk size and close the file:
 
 ```nimrod
 ww.endFile()
