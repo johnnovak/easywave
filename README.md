@@ -19,21 +19,22 @@ swapping etc.)
 ### Features
 
 * Reading and writing of **8/16/24/32-bit integer PCM** and **32/64-bit IEEE float PCM** WAVE files
-* Reading and writing of **markers** and **regions**.
-* An easy way to write nested chunks.
-* Support for little-endian (RIFF) and big-endian (RIFX) files.
+* Reading and writing of **markers** and **regions**
+* An easy way to write **nested chunks**
+* Support for **little-endian (RIFF)** and **big-endian (RIFX)** files
 * Works on both little-endian and big-endian architectures (byte-swapping is
-  handled transparently to the user when necessary).
+  handled transparently to the user when necessary)
 
 ### Limitations
 
-* No support for compressed formats.
-* No support for esoteric bit-lengths (e.g. 20-bit PCM).
+* No support for compressed formats
+* No support for esoteric bit-lengths (e.g. 20-bit PCM)
 * Can only read/write the format and cue chunks, and partially the
   list chunk. Reading/writing of any other chunk types has to be implemented
   by the user.
-* No direct support for editing (updating) existing files.
-* No "recovery mode" for handling malformed files.
+* No direct support for editing (updating) existing files
+* No "recovery mode" for handling malformed files
+* Only files are supported (so no streams or memory buffers)
 
 
 ## Usage
@@ -67,6 +68,8 @@ To create a new WAVE file, a `WaveWriter` object needs to be instantiated
 first:
 
 ```nimrod
+import easywave
+
 var ww = writeWaveFile(
   filename = "example.wav",
   format = wf16BitInteger,
@@ -119,7 +122,7 @@ ww.writeCueChunk()
 ww.writeListChunk()
 ```
 
-Finally, the `endFile()` method must be called that will updates the master
+Finally, the `endFile()` method must be called that will update the master
 RIFF chunk with the correct chunk size and close the file:
 
 ```nimrod
