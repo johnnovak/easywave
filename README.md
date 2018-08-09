@@ -24,6 +24,7 @@ swapping in I/O methods etc.)
 * Works on both little-endian and big-endian architectures (byte-swapping is
   handled transparently to the client code)
 * Native Nim implementation, no external dependencies
+* Released under [WTFPL](http://www.wtfpl.net/)
 
 ### Limitations
 
@@ -134,13 +135,13 @@ available functions.
 ```nimrod
 var wr = openWaveFile("example.wav")
 
-var cueChunk, listChunk, dataChunk
+var cueChunk, listChunk, dataChunk: WaveChunkInfo
 
 # Iterate through all chunks
 while wr.hasNextChunk():
   var ci = wr.nextChunk()
   case ci.id
-  of FOURCC_FORMAT: wr.readFormatChunk(fmtChunk)
+  of FOURCC_FORMAT: wr.readFormatChunk(ci)
   of FOURCC_CUE:    cueChunk = ci
   of FOURCC_LIST:   listChunk = ci
   of FOURCC_DATA:   dataChunk = ci
@@ -313,3 +314,10 @@ integers than with packed data, hence the two different methods.
   (the writer takes care of this, but this might surprise some people when
   reading files).
 
+## License
+
+Copyright © 2018 John Novak <<john@johnnovak.net>>
+
+This work is free. You can redistribute it and/or modify it under the terms of
+the **Do What The Fuck You Want To Public License, Version 2**, as published
+by Sam Hocevar. See the `COPYING` file for more details.
