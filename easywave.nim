@@ -20,10 +20,10 @@ const
   FOURCC_DATA*         = "data"  ## Data chunk ID
   FOURCC_CUE*          = "cue "  ## Cue chunk ID
   FOURCC_LIST*         = "LIST"  ## List chunk ID
-  FOURCC_ASSOC_DATA*   = "adtl"  ## Associated data list chunk ID
+  FOURCC_ASSOC_DATA*   = "adtl"  ## Associated data list ID
   FOURCC_LABEL*        = "labl"  ## Label chunk ID
   FOURCC_LABELED_TEXT* = "ltxt"  ## Labeled text chunk ID
-  FOURCC_REGION*       = "rgn "  ## Region chunk ID
+  FOURCC_REGION*       = "rgn "  ## Region purpose ID
 
   WAVE_FORMAT_PCM = 1
   WAVE_FORMAT_IEEE_FLOAT = 3
@@ -63,6 +63,7 @@ type
     numChannels:   Natural
     chunks:        seq[WaveChunkInfo]
     regions:       OrderedTable[uint32, WaveRegion]
+    dataSize:      uint32
 
     readBuffer:    seq[uint8]
     riffChunkSize: uint32  # TODO use filesize instead?
@@ -105,7 +106,9 @@ proc chunks*(wr: WaveReader): seq[WaveChunkInfo] {.inline.} =
 
 proc regions*(wr: WaveReader): OrderedTable[uint32, WaveRegion] {.inline.} =
   wr.regions
-## Returns an ordered table of regions where the key is the region ID.
+
+proc dataSize*(wr: WaveReader): uint32 {.inline.} =
+  wr.dataSize
 
 
 proc raiseWaveReadError() {.noreturn.} =
@@ -224,12 +227,18 @@ proc readFloat64*(wr: WaveReader): float64 =
 # }}}
 # {{{ Buffered read
 
+# TODO readData methods should use pointers
+
+# 8-bit
+
 proc readData*(wr: var WaveReader,
                dest: var openArray[int8|uint8], len: Natural) =
   ## Reads `len` number of ``int8|uint8`` values into `dest` from the current
   ## file position and performs endianness conversion if necessary. Raises
   ## a ``WaveReadError`` on read errors.
   wr.readBuf(dest[0].addr, len)
+
+# 16-bit
 
 proc readData*(wr: var WaveReader,
                dest: var openArray[int16|uint16], len: Natural) =
@@ -255,6 +264,11 @@ proc readData*(wr: var WaveReader,
   else:
     wr.readBuf(dest[0].addr, len * WIDTH)
 
+# 24-bit
+
+# TODO
+
+# 32-bit
 
 proc readData*(wr: var WaveReader,
                dest: var openArray[int32|uint32|float32], len: Natural) =
@@ -280,6 +294,7 @@ proc readData*(wr: var WaveReader,
   else:
     wr.readBuf(dest[0].addr, len * WIDTH)
 
+# 64-bit
 
 proc readData*(wr: var WaveReader,
                dest: var openArray[int64|uint64|float64], len: Natural) =
@@ -524,8 +539,6 @@ proc buildChunkList*(wr: var WaveReader) =
   while wr.hasNextChunk():
     var ci = wr.nextChunk()
     wr.chunks.add(ci)
-    if ci.id == FOURCC_FORMAT:
-      wr.readFormatChunk()
 
 
 proc parseWaveFile*(filename: string, readRegions: bool = false,
@@ -538,7 +551,20 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
 
   wr.buildChunkList()
 
-  wr.regions = initOrderedTable[uint32, WaveRegion]()
+  let (fmtFound, fmtChunk) = wr.findChunk(FOURCC_FORMAT)
+  if fmtFound:
+    wr.readFormatChunk()
+  else:
+    raise newException(WaveReaderError, fmt"'{FOURCC_FORMAT}' chunk not found")
+
+  if readRegions:
+    let (cueFound, cueChunk) = wr.findChunk(FOURCC_CUE)
+    let (listFound, listChunk) = wr.findChunk(FOURCC_LIST)
+
+    if cueFound and listFound:
+      ww.readRegions(cueChunk, listChunk)
+
+#[  wr.regions = initOrderedTable[uint32, WaveRegion]()
   if readRegions:
     for ci in wr.chunks:
       if ci.id == FOURCC_CUE:
@@ -548,16 +574,17 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
     for ci in wr.chunks:
       if ci.id == FOURCC_LIST:
         setFilePos(wr.file, ci.filePos)
-        wr.readRegionLabelsAndEndOffsetsFromListChunk(wr.regions)
+        wr.readRegionLabelsAndEndOffsetsFromListChunk(wr.regions) ]#
 
   # Seek to the start of the data chunk
-  for ci in wr.chunks:
-    if ci.id == FOURCC_DATA:
-      wr.setNextChunkPos(ci)
-      setFilePos(wr.file, ci.filePos)
-      return wr
-
-  raise newException(WaveReaderError, fmt"'{FOURCC_DATA}' chunk not found")
+  let (dataFound, dataChunk) = wr.findChunk(FOURCC_DATA)
+  if dataFound:
+    wr.setNextChunkPos(ci)
+    wr.dataSize = ci.size
+    setFilePos(wr.file, ci.filePos + CHUNK_HEADER_SIZE)
+    return wr
+  else:
+    raise newException(WaveReaderError, fmt"'{FOURCC_DATA}' chunk not found")
 
 # }}}
 # {{{ Writer
