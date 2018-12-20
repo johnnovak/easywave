@@ -1,6 +1,6 @@
 ## :Author: John Novak <john@johnnovak.net>
 ##
-## 
+##
 ##
 
 import endians, strformat, tables
@@ -50,6 +50,9 @@ type
     length*:     uint32  ## length of the region in frames (0 for markers)
     label*:      string  ## text label
 
+  WaveRegionTable* =
+    OrderedTable[uint32, WaveRegion]
+
 # }}}
 # {{{ Reader
 
@@ -62,7 +65,7 @@ type
     sampleRate:    Natural
     numChannels:   Natural
     chunks:        seq[WaveChunkInfo]
-    regions:       OrderedTable[uint32, WaveRegion]
+    regions:       WaveRegionTable
     dataSize:      uint32
 
     readBuffer:    seq[uint8]
@@ -70,7 +73,11 @@ type
     nextChunkPos:  int64
     swapEndian:    bool
 
-type WaveReaderError* = object of Exception
+  WaveReaderError* = object of Exception
+
+
+proc initWaveReader*(): WaveReader =
+  result.regions = initOrderedTable[uint32, WaveRegion]()
 
 proc filename*(wr: WaveReader): string {.inline.} =
   ## The filename of the WAVE file.
@@ -104,7 +111,7 @@ proc chunks*(wr: WaveReader): seq[WaveChunkInfo] {.inline.} =
   ## by ``parseWaveFile`` and ``buildChunkList``).
   wr.chunks
 
-proc regions*(wr: WaveReader): OrderedTable[uint32, WaveRegion] {.inline.} =
+proc regions*(wr: WaveReader): WaveRegionTable {.inline.} =
   wr.regions
 
 proc dataSize*(wr: WaveReader): uint32 {.inline.} =
@@ -410,9 +417,7 @@ proc readFormatChunk*(wr: var WaveReader) =
   wr.sampleRate = samplesPerSec
 
 
-proc readRegionIdsAndStartOffsetsFromCueChunk*(
-    wr: var WaveReader, regions: var OrderedTable[uint32, WaveRegion]) =
-
+proc readRegionIdsAndStartOffsetsFromCueChunk*(wr: var WaveReader) =
   let chunkId = wr.readFourCC()
   if chunkId != FOURCC_CUE:
     raise newException(WaveReaderError, fmt"'{FOURCC_CUE}' chunk not found")
@@ -428,21 +433,19 @@ proc readRegionIdsAndStartOffsetsFromCueChunk*(
       let
         cuePointId   = wr.readUInt32()
         position     = wr.readUInt32()  # ignored
-        dataChunkId  = wr.readFourCC()    # must be 'data'
+        dataChunkId  = wr.readFourCC()  # must be 'data'
         chunkStart   = wr.readUInt32()  # ignored
         blockStart   = wr.readUInt32()  # ignored
         sampleOffset = wr.readUInt32()
 
       if dataChunkId == FOURCC_DATA:
-        if not regions.hasKey(cuePointId):
-          var wr: WaveRegion
-          regions[cuePointId] = wr
-        regions[cuePointId].startFrame = sampleOffset
+        if not wr.regions.hasKey(cuePointId):
+          var region: WaveRegion
+          wr.regions[cuePointId] = region
+        wr.regions[cuePointId].startFrame = sampleOffset
 
 
-proc readRegionLabelsAndEndOffsetsFromListChunk*(
-    wr: var WaveReader, regions: var OrderedTable[uint32, WaveRegion]) =
-
+proc readRegionLabelsAndEndOffsetsFromListChunk*(wr: var WaveReader) =
   let chunkId = wr.readFourCC()
   if chunkId != FOURCC_LIST:
     raise newException(WaveReaderError, fmt"'{FOURCC_LIST}' chunk not found")
@@ -464,8 +467,8 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
       var text = newString(textSize-1)  # don't read the terminating zero byte
       wr.readBuf(text[0].addr, textSize-1)
 
-      if regions.hasKey(cuePointId):
-        regions[cuePointId].label = text
+      if wr.regions.hasKey(cuePointId):
+        wr.regions[cuePointId].label = text
 
       setFilePos(wr.file, 1, fspCur)  # skip terminating zero
       if isOdd(textSize):
@@ -480,8 +483,8 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
         purposeId    = wr.readFourCC()
 
       if purposeId == FOURCC_REGION:
-        if regions.hasKey(cuePointId):
-          regions[cuePointId].length = sampleLength
+        if wr.regions.hasKey(cuePointId):
+          wr.regions[cuePointId].length = sampleLength
 
       if isOdd(subChunkSize):
         inc(subChunkSize)
@@ -493,6 +496,14 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(
         inc(subChunkSize)
       inc(pos, CHUNK_HEADER_SIZE + subChunkSize.int)
       setFilePos(wr.file, subChunkSize.int64, fspCur)
+
+
+proc readRegions(wr: var WaveReader, cueChunk, listChunk: WaveChunkInfo) =
+  setFilePos(wr.file, cueChunk.filePos)
+  wr.readRegionIdsAndStartOffsetsFromCueChunk()
+
+  setFilePos(wr.file, listChunk.filePos)
+  wr.readRegionLabelsAndEndOffsetsFromListChunk()
 
 
 proc readWaveHeader(wr: var WaveReader) =
@@ -519,7 +530,7 @@ proc openWaveFile*(filename: string, bufSize: Natural = 4096): WaveReader =
   ## Opens a WAVE file for reading but does not parse anything else than the
   ## master RIFF header. Raises a ``WaveReaderError`` if the file is not
   ## a valid WAVE file and on read errors.
-  var wr: WaveReader
+  var wr = initWaveReader()
   if not open(wr.file, filename, fmRead):
     raise newException(WaveReaderError, fmt"Error opening file for reading")
 
@@ -541,6 +552,15 @@ proc buildChunkList*(wr: var WaveReader) =
     wr.chunks.add(ci)
 
 
+proc findChunk*(wr: WaveReader, fourCC: string): tuple[found: bool,
+                                                       chunk: WaveChunkInfo] =
+  for ci in wr.chunks:
+    if ci.id == fourCC:
+      return (true, ci)
+  var ci: WaveChunkInfo
+  result = (false, ci)
+
+
 proc parseWaveFile*(filename: string, readRegions: bool = false,
                     bufSize: Natural = 4096): WaveReader =
   ## Opens a WAVE file for reading, builds the chunk list, reads the format
@@ -552,6 +572,7 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
   wr.buildChunkList()
 
   let (fmtFound, fmtChunk) = wr.findChunk(FOURCC_FORMAT)
+  setFilePos(wr.file, fmtChunk.filePos)
   if fmtFound:
     wr.readFormatChunk()
   else:
@@ -562,26 +583,14 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
     let (listFound, listChunk) = wr.findChunk(FOURCC_LIST)
 
     if cueFound and listFound:
-      ww.readRegions(cueChunk, listChunk)
-
-#[  wr.regions = initOrderedTable[uint32, WaveRegion]()
-  if readRegions:
-    for ci in wr.chunks:
-      if ci.id == FOURCC_CUE:
-        setFilePos(wr.file, ci.filePos)
-        wr.readRegionIdsAndStartOffsetsFromCueChunk(wr.regions)
-
-    for ci in wr.chunks:
-      if ci.id == FOURCC_LIST:
-        setFilePos(wr.file, ci.filePos)
-        wr.readRegionLabelsAndEndOffsetsFromListChunk(wr.regions) ]#
+      wr.readRegions(cueChunk, listChunk)
 
   # Seek to the start of the data chunk
   let (dataFound, dataChunk) = wr.findChunk(FOURCC_DATA)
   if dataFound:
-    wr.setNextChunkPos(ci)
-    wr.dataSize = ci.size
-    setFilePos(wr.file, ci.filePos + CHUNK_HEADER_SIZE)
+    wr.setNextChunkPos(dataChunk)
+    wr.dataSize = dataChunk.size
+    setFilePos(wr.file, dataChunk.filePos + CHUNK_HEADER_SIZE)
     return wr
   else:
     raise newException(WaveReaderError, fmt"'{FOURCC_DATA}' chunk not found")
@@ -596,7 +605,7 @@ type
     format:         WaveFormat
     sampleRate:     Natural
     numChannels:    Natural
-    regions:        OrderedTable[uint32, WaveRegion]
+    regions:        WaveRegionTable
 
     file:           File
     writeBuffer:    seq[uint8]
@@ -608,6 +617,9 @@ type
   WaveWriterError* = object of Exception
 
 
+proc initWaveWriter*(): WaveWriter =
+  result.regions = initOrderedTable[uint32, WaveRegion]()
+
 proc filename*(ww: WaveWriter): string {.inline.} = ww.filename
 proc endianness*(ww: WaveWriter): Endianness {.inline.} = ww.endianness
 proc format*(ww: WaveWriter): WaveFormat {.inline.} = ww.format
@@ -615,10 +627,10 @@ proc sampleRate*(ww: WaveWriter): Natural {.inline.} = ww.sampleRate
 proc numChannels*(ww: WaveWriter): Natural {.inline.} = ww.numChannels
 
 proc `regions=`*(ww: var WaveWriter,
-                 regions: OrderedTable[uint32, WaveRegion]) {.inline.} =
+                 regions: WaveRegionTable) {.inline.} =
   ww.regions = regions
 
-proc regions*(ww: WaveWriter): OrderedTable[uint32, WaveRegion] {.inline.} =
+proc regions*(ww: WaveWriter): WaveRegionTable {.inline.} =
   ww.regions
 
 proc checkFileClosed(ww: WaveWriter) =
@@ -950,7 +962,7 @@ proc endChunk*(ww: var WaveWriter) =
 proc writeWaveFile*(filename: string, format: WaveFormat, sampleRate: Natural,
                     numChannels: Natural, bufSize: Natural = 4096,
                     endianness = littleEndian): WaveWriter =
-  var ww: WaveWriter
+  var ww = initWaveWriter()
   ww.filename = filename
 
   if not open(ww.file, ww.filename, fmWrite):
