@@ -50,6 +50,8 @@ type
     length*:     uint32  ## length of the region in frames (0 for markers)
     label*:      string  ## text label
 
+  RegionTable* = OrderedTable[uint32, Region]
+
 # }}}
 # {{{ Reader
 
@@ -62,7 +64,7 @@ type
     sampleRate:    Natural
     numChannels:   Natural
     chunks:        seq[ChunkInfo]
-    regions:       OrderedTable[uint32, Region]
+    regions:       RegionTable
     currChunk:     ChunkInfo
 
     # private
@@ -109,7 +111,7 @@ proc chunks*(wr: WaveReader): seq[ChunkInfo] {.inline.} =
   ## by ``parseWaveFile`` and ``buildChunkList``).
   wr.chunks
 
-proc regions*(wr: WaveReader): OrderedTable[uint32, Region] {.inline.} =
+proc regions*(wr: WaveReader): RegionTable {.inline.} =
   wr.regions
 
 proc currChunk*(wr: WaveReader): ChunkInfo {.inline.} =
@@ -613,7 +615,7 @@ type
     format:         SampleFormat
     sampleRate:     Natural
     numChannels:    Natural
-    regions:        OrderedTable[uint32, Region]
+    regions:        RegionTable
 
     file:           File
     writeBuffer:    seq[uint8]
@@ -634,11 +636,10 @@ proc format*(ww: WaveWriter): SampleFormat {.inline.} = ww.format
 proc sampleRate*(ww: WaveWriter): Natural {.inline.} = ww.sampleRate
 proc numChannels*(ww: WaveWriter): Natural {.inline.} = ww.numChannels
 
-proc `regions=`*(ww: var WaveWriter,
-                 regions: OrderedTable[uint32, Region]) {.inline.} =
+proc `regions=`*(ww: var WaveWriter, regions: RegionTable) {.inline.} =
   ww.regions = regions
 
-proc regions*(ww: WaveWriter): OrderedTable[uint32, Region] {.inline.} =
+proc regions*(ww: WaveWriter): RegionTable {.inline.} =
   ww.regions
 
 proc checkFileClosed(ww: WaveWriter) =
