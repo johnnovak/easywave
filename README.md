@@ -66,7 +66,7 @@ This method will:
   `sampleRate` and `numChannels` properties.
 
 * Find all chunks in the file and store this info as a sequence of
-  `WaveChunkInfo` objects in the `chunks` property. The size of the sample
+  `ChunkInfo` objects in the `chunks` property. The size of the sample
   data in bytes will be available through the `dataSize` property.
 
 * If `readRegions` was set to `true`, try to read marker and region
@@ -135,7 +135,7 @@ available functions.
 ```nimrod
 var wr = openWaveFile("example.wav")
 
-var cueChunk, listChunk, dataChunk: WaveChunkInfo
+var cueChunk, listChunk, dataChunk: ChunkInfo
 
 # Iterate through all chunks
 while wr.hasNextChunk():
@@ -190,14 +190,14 @@ format chunk.
 
 To write markers and regions to the file, you'll need to descibe them as a
 table of values where the keys are the marker/region IDs (32-bit unsigned
-integers unique per marker/region) and the values `WaveRegion` objects.
+integers unique per marker/region) and the values `Region` objects.
 Markers are defined simply as regions with a length of zero.
 
 ```nimrod
 ww.regions = {
-  1'u32: WaveRegion(startFrame:     0, length:     0, label: "marker1"),
-  2'u32: WaveRegion(startFrame:  1000, length:     0, label: "marker2"),
-  3'u32: WaveRegion(startFrame: 30000, length: 10000, label: "region2")
+  1'u32: Region(startFrame:     0, length:     0, label: "marker1"),
+  2'u32: Region(startFrame:  1000, length:     0, label: "marker2"),
+  3'u32: Region(startFrame: 30000, length: 10000, label: "region2")
 }.toOrderedTable
 
 ww.writeRegions()
