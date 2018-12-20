@@ -9,11 +9,11 @@ const
 
 proc setRegions(ww: var WaveWriter) =
   ww.regions = {
-    1'u32: WaveRegion(startFrame:     0, length:     0, label: "marker1"),
-    2'u32: WaveRegion(startFrame:  1000, length:     0, label: "marker2"),
-    3'u32: WaveRegion(startFrame:  3000, length:     0, label: "marker3"),
-    4'u32: WaveRegion(startFrame: 10000, length:  5000, label: "region1"),
-    5'u32: WaveRegion(startFrame: 30000, length: 10000, label: "region2")
+    1'u32: Region(startFrame:     0, length:     0, label: "marker1"),
+    2'u32: Region(startFrame:  1000, length:     0, label: "marker2"),
+    3'u32: Region(startFrame:  3000, length:     0, label: "marker3"),
+    4'u32: Region(startFrame: 10000, length:  5000, label: "region1"),
+    5'u32: Region(startFrame: 30000, length: 10000, label: "region2")
   }.toOrderedTable
 
 # {{{ write8BitTestFile

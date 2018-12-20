@@ -66,14 +66,20 @@ type
     currChunk:     ChunkInfo
 
     # private
-    file:          File
-    readBuffer:    seq[uint8]
-    riffChunkSize: uint32  # TODO use filesize instead?
-    nextChunkPos:  int64
-    chunkPos:      int64
-    swapEndian:    bool
+    file:             File
+    readBuffer:       seq[uint8]
+    riffChunkSize:    uint32
+    nextChunkPos:     int64
+    chunkPos:         int64
+    swapEndian:       bool
+    checkChunkLimits: bool
 
-type WaveReaderError* = object of Exception
+  WaveReaderError* = object of Exception
+
+
+proc initWaveReader*(): WaveReader =
+  result.regions = initOrderedTable[uint32, Region]()
+  result.checkChunkLimits = true
 
 proc filename*(wr: WaveReader): string {.inline.} =
   ## The filename of the WAVE file.
@@ -117,13 +123,11 @@ proc checkReadLen(wr: WaveReader, len: Natural) =
       fmt"chunk size: {chunkSize}, chunk pos: {wr.chunkPos}, " &
       fmt"bytes to read: {len}")
 
-proc raiseWaveReadError() {.noreturn.} =
-  raise newException(WaveReaderError, fmt"Error reading file")
-
 template readBuf(wr: var WaveReader, data: pointer, len: Natural) =
-  wr.checkReadLen(len)
+  if wr.checkChunkLimits:
+    wr.checkReadLen(len)
   if readBuffer(wr.file, data, len) != len:
-    raiseWaveReadError()
+    raise newException(WaveReaderError, fmt"Error reading file")
   inc(wr.chunkPos, len)
 
 # {{{ Single-value read
@@ -361,6 +365,8 @@ proc nextChunk*(wr: var WaveReader): ChunkInfo =
   ## Finds the next chunk in the file; raises a ``WaveReadError`` if the end
   ## of file has been reached. Returns chunk info and sets the file pointer to
   ## the start of the chunk if successful.
+  wr.checkChunkLimits = false
+
   if wr.nextChunkPos >= CHUNK_HEADER_SIZE + wr.riffChunkSize.int64:
     raise newException(WaveReaderError,
                        "Cannot seek to next chunk, end of file reached")
@@ -374,6 +380,8 @@ proc nextChunk*(wr: var WaveReader): ChunkInfo =
 
   wr.setCurrentChunk(ci)
   result = ci
+
+  wr.checkChunkLimits = true
 
 
 proc setChunkPos(wr: var WaveReader, pos: int64, mode: FileSeekPos = fspSet) = 
@@ -414,7 +422,6 @@ proc readFormatChunk*(wr: var WaveReader) =
   ## unsupported format etc.).
   {.hint[XDeclaredButNotUsed]: off.}
   let
-    chunkSize      = wr.readUInt32()  # ignored
     format         = wr.readUInt16()
     channels       = wr.readUInt16()
     samplesPerSec  = wr.readUInt32()
@@ -471,7 +478,12 @@ proc readRegionIdsAndStartOffsetsFromCueChunk(wr: var WaveReader) =
 
 
 proc readRegionLabelsAndEndOffsetsFromListChunk(wr: var WaveReader) =
-  var pos = 4  # listTypeId has to be included in the count
+  let assocDataListId = wr.readFourCC()
+  if assocDataListId != FOURCC_ASSOC_DATA:
+    raise newException(WaveReaderError,
+      fmt"Associated data list ID ('{FOURCC_ASSOC_DATA}') not found)")
+  var pos = 4
+
   while pos.uint32 < wr.currChunk.size:
     let subChunkId   = wr.readFourCC()
     var subChunkSize = wr.readUInt32()
@@ -518,11 +530,13 @@ proc readRegionLabelsAndEndOffsetsFromListChunk(wr: var WaveReader) =
 proc readRegions*(wr: var WaveReader, cueChunk, listChunk: ChunkInfo) =
   wr.setCurrentChunk(cueChunk)
   wr.readRegionIdsAndStartOffsetsFromCueChunk()
-  wr.setCurrentChunk(cueChunk)
+  wr.setCurrentChunk(listChunk)
   wr.readRegionLabelsAndEndOffsetsFromListChunk()
 
 
 proc readWaveHeader(wr: var WaveReader) =
+  wr.checkChunkLimits = false
+
   let id = wr.readFourCC()
   case id
   of FOURCC_RIFF_LE: wr.endianness = littleEndian
@@ -540,13 +554,14 @@ proc readWaveHeader(wr: var WaveReader) =
                        "Not a WAVE file ('{FOURCC_WAVE}' chunk not found)")
 
   wr.nextChunkPos = FOURCC_SIZE + CHUNK_HEADER_SIZE
+  wr.checkChunkLimits = true
 
 
 proc openWaveFile*(filename: string, bufSize: Natural = 4096): WaveReader =
   ## Opens a WAVE file for reading but does not parse anything else than the
   ## master RIFF header. Raises a ``WaveReaderError`` if the file is not
   ## a valid WAVE file and on read errors.
-  var wr: WaveReader
+  var wr = initWaveReader()
   if not open(wr.file, filename, fmRead):
     raise newException(WaveReaderError, fmt"Error opening file for reading")
 
@@ -609,6 +624,9 @@ type
 
   WaveWriterError* = object of Exception
 
+
+proc initWaveWriter*(): WaveWriter =
+  result.regions = initOrderedTable[uint32, Region]()
 
 proc filename*(ww: WaveWriter): string {.inline.} = ww.filename
 proc endianness*(ww: WaveWriter): Endianness {.inline.} = ww.endianness
@@ -952,7 +970,7 @@ proc endChunk*(ww: var WaveWriter) =
 proc writeWaveFile*(filename: string, format: SampleFormat, sampleRate: Natural,
                     numChannels: Natural, bufSize: Natural = 4096,
                     endianness = littleEndian): WaveWriter =
-  var ww: WaveWriter
+  var ww = initWaveWriter()
   ww.filename = filename
 
   if not open(ww.file, ww.filename, fmWrite):

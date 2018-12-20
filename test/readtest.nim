@@ -21,7 +21,3 @@ if wr.regions.len > 0:
   echo "\nRegions:"
   for id, r in wr.regions.pairs:
     echo fmt"id: {id}, {r}"
-
-var numBytes = wr.dataSize
-echo ""
-echo fmt"Sample data size: {numBytes} bytes"
