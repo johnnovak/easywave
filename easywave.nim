@@ -31,12 +31,12 @@ const
 type
   SampleFormat* = enum
     ## supported WAVE formats (bit-depths)
-    wf8BitInteger  = (0,  "8-bit integer"),
-    wf16BitInteger = (1, "16-bit integer"),
-    wf24BitInteger = (2, "24-bit integer"),
-    wf32BitInteger = (3, "32-bit integer"),
-    wf32BitFloat   = (4, "32-bit IEEE float"),
-    wf64BitFloat   = (5, "64-bit IEEE float")
+    sf8BitInteger  = (0,  "8-bit integer"),
+    sf16BitInteger = (1, "16-bit integer"),
+    sf24BitInteger = (2, "24-bit integer"),
+    sf32BitInteger = (3, "32-bit integer"),
+    sf32BitFloat   = (4, "32-bit IEEE float"),
+    sf64BitFloat   = (5, "64-bit IEEE float")
 
   ChunkInfo* = object
     ## contains information about a chunk
@@ -434,18 +434,18 @@ proc readFormatChunk*(wr: var WaveReader) =
   case format
   of WAVE_FORMAT_PCM:
     case bitsPerSample:
-    of  8: wr.format = wf8BitInteger
-    of 16: wr.format = wf16BitInteger
-    of 24: wr.format = wf24BitInteger
-    of 32: wr.format = wf32BitInteger
+    of  8: wr.format = sf8BitInteger
+    of 16: wr.format = sf16BitInteger
+    of 24: wr.format = sf24BitInteger
+    of 32: wr.format = sf32BitInteger
     else:
       raise newException(WaveReaderError,
                          fmt"Unsupported integer bit depth: {bitsPerSample}")
 
   of WAVE_FORMAT_IEEE_FLOAT:
     case bitsPerSample:
-    of 32: wr.format = wf32BitFloat
-    of 64: wr.format = wf64BitFloat
+    of 32: wr.format = sf32BitFloat
+    of 64: wr.format = sf64BitFloat
     else:
       raise newException(WaveReaderError,
                          fmt"Unsupported float bit depth: {bitsPerSample}")
@@ -1003,12 +1003,12 @@ proc writeFormatChunk*(ww: var WaveWriter) =
   var bitsPerSample: uint16
 
   case ww.format
-  of wf8BitInteger:  formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 8
-  of wf16BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 16
-  of wf24BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 24
-  of wf32BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 32
-  of wf32BitFloat:   formatTag = WAVE_FORMAT_IEEE_FLOAT; bitsPerSample = 32
-  of wf64BitFloat:   formatTag = WAVE_FORMAT_IEEE_FLOAT; bitsPerSample = 64
+  of sf8BitInteger:  formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 8
+  of sf16BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 16
+  of sf24BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 24
+  of sf32BitInteger: formatTag = WAVE_FORMAT_PCM;        bitsPerSample = 32
+  of sf32BitFloat:   formatTag = WAVE_FORMAT_IEEE_FLOAT; bitsPerSample = 32
+  of sf64BitFloat:   formatTag = WAVE_FORMAT_IEEE_FLOAT; bitsPerSample = 64
 
   var blockAlign = (ww.numChannels.uint16 * bitsPerSample div 8).uint16
   var avgBytesPerSec = ww.sampleRate.uint32 * blockAlign
