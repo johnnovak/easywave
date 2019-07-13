@@ -79,7 +79,7 @@ type
   WaveReaderError* = object of Exception
 
 
-proc initWaveReader*(): WaveReader =
+proc initWaveReader(): WaveReader =
   result.regions = initOrderedTable[uint32, Region]()
   result.checkChunkLimits = true
 
@@ -112,9 +112,11 @@ proc chunks*(wr: WaveReader): seq[ChunkInfo] {.inline.} =
   wr.chunks
 
 proc regions*(wr: WaveReader): RegionTable {.inline.} =
+  ## TODO
   wr.regions
 
 proc currChunk*(wr: WaveReader): ChunkInfo {.inline.} =
+  ## TODO
   wr.currChunk
 
 proc checkReadLen(wr: WaveReader, len: Natural) = 
@@ -354,6 +356,7 @@ proc setNextChunkPos(wr: var WaveReader, ci: ChunkInfo) =
     inc(wr.nextChunkPos)
 
 proc setCurrentChunk*(wr: var WaveReader, ci: ChunkInfo) =
+  ## TODO
   wr.currChunk = ci
   wr.setNextChunkPos(ci)
   wr.chunkPos = 0
@@ -411,7 +414,8 @@ proc buildChunkList*(wr: var WaveReader) =
 
 
 proc findChunk*(wr: WaveReader, chunkId: string): tuple[found: bool,
-                                                      chunk: ChunkInfo] =
+                                                        chunk: ChunkInfo] =
+  ## TODO
   for ci in wr.chunks:
     if ci.id == chunkId:
       return (true, ci)
@@ -530,6 +534,7 @@ proc readRegionLabelsAndEndOffsetsFromListChunk(wr: var WaveReader) =
 
 
 proc readRegions*(wr: var WaveReader, cueChunk, listChunk: ChunkInfo) =
+  ## TODO
   wr.setCurrentChunk(cueChunk)
   wr.readRegionIdsAndStartOffsetsFromCueChunk()
   wr.setCurrentChunk(listChunk)
@@ -628,18 +633,35 @@ type
 
 
 proc initWaveWriter*(): WaveWriter =
+  ## TODO
   result.regions = initOrderedTable[uint32, Region]()
 
-proc filename*(ww: WaveWriter): string {.inline.} = ww.filename
-proc endianness*(ww: WaveWriter): Endianness {.inline.} = ww.endianness
-proc format*(ww: WaveWriter): SampleFormat {.inline.} = ww.format
-proc sampleRate*(ww: WaveWriter): Natural {.inline.} = ww.sampleRate
-proc numChannels*(ww: WaveWriter): Natural {.inline.} = ww.numChannels
+proc filename*(ww: WaveWriter): string {.inline.} =
+  ## TODO
+  ww.filename
+
+proc endianness*(ww: WaveWriter): Endianness {.inline.} =
+  ## TODO
+  ww.endianness
+
+proc format*(ww: WaveWriter): SampleFormat {.inline.} =
+  ## TODO
+  ww.format
+
+proc sampleRate*(ww: WaveWriter): Natural {.inline.} =
+  ## TODO
+  ww.sampleRate
+
+proc numChannels*(ww: WaveWriter): Natural {.inline.} =
+  ## TODO
+  ww.numChannels
 
 proc `regions=`*(ww: var WaveWriter, regions: RegionTable) {.inline.} =
+  ## TODO
   ww.regions = regions
 
 proc regions*(ww: WaveWriter): RegionTable {.inline.} =
+  ## TODO
   ww.regions
 
 proc checkFileClosed(ww: WaveWriter) =
@@ -658,18 +680,22 @@ proc writeBuf(ww: var WaveWriter, data: pointer, len: Natural) =
 # {{{ Single-value write
 
 proc writeFourCC*(ww: var WaveWriter, fourCC: string) =
+  ## TODO
   var buf = fourCC
   ww.writeBuf(buf[0].addr, 4)
 
 proc writeString*(ww: var WaveWriter, s: string) =
+  ## TODO
   var buf = s
   ww.writeBuf(buf[0].addr, s.len)
 
 proc writeInt8*(ww: var WaveWriter, d: int8) =
+  ## TODO
   var dest = d
   ww.writeBuf(dest.addr, 1)
 
 proc writeInt16*(ww: var WaveWriter, d: int16) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: int16
@@ -679,6 +705,7 @@ proc writeInt16*(ww: var WaveWriter, d: int16) =
     ww.writeBuf(src.addr, 2)
 
 proc writeInt32*(ww: var WaveWriter, d: int32) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: int32
@@ -688,6 +715,7 @@ proc writeInt32*(ww: var WaveWriter, d: int32) =
     ww.writeBuf(src.addr, 4)
 
 proc writeInt64*(ww: var WaveWriter, d: int64) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: int64
@@ -697,10 +725,12 @@ proc writeInt64*(ww: var WaveWriter, d: int64) =
     ww.writeBuf(src.addr, 8)
 
 proc writeUInt8*(ww: var WaveWriter, d: uint8) =
+  ## TODO
   var dest = d
   ww.writeBuf(dest.addr, 1)
 
 proc writeUInt16*(ww: var WaveWriter, d: uint16) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: int16
@@ -710,6 +740,7 @@ proc writeUInt16*(ww: var WaveWriter, d: uint16) =
     ww.writeBuf(src.addr, 2)
 
 proc writeUInt32*(ww: var WaveWriter, d: uint32) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: int32
@@ -719,6 +750,7 @@ proc writeUInt32*(ww: var WaveWriter, d: uint32) =
     ww.writeBuf(src.addr, 4)
 
 proc writeUInt64*(ww: var WaveWriter, d: uint64) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: int64
@@ -728,6 +760,7 @@ proc writeUInt64*(ww: var WaveWriter, d: uint64) =
     ww.writeBuf(src.addr, 8)
 
 proc writeFloat32*(ww: var WaveWriter, d: float32) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: float32
@@ -737,6 +770,7 @@ proc writeFloat32*(ww: var WaveWriter, d: float32) =
     ww.writeBuf(src.addr, 4)
 
 proc writeFloat64*(ww: var WaveWriter, d: float64) =
+  ## TODO
   var src = d
   if ww.swapEndian:
     var dest: float64
@@ -752,15 +786,18 @@ proc writeFloat64*(ww: var WaveWriter, d: float64) =
 
 proc writeData*(ww: var WaveWriter, data: var openArray[int8|uint8],
                 len: Natural) =
+  ## TODO
   ww.writeBuf(data[0].addr, len)
 
 proc writeData*(ww: var WaveWriter, data: var openArray[int8|uint8]) =
+  ## TODO
   ww.writeBuf(data[0].addr, data.len)
 
 
 # 16-bit
 
 proc writeData16*(ww: var WaveWriter, data: pointer, len: Natural) =
+  ## TODO
   const WIDTH = 2
   assert len mod WIDTH == 0
 
@@ -786,15 +823,18 @@ proc writeData16*(ww: var WaveWriter, data: pointer, len: Natural) =
 
 proc writeData*(ww: var WaveWriter, data: var openArray[int16|uint16],
                 len: Natural) =
+  ## TODO
   ww.writeData16(data[0].addr, len * 2)
 
 proc writeData*(ww: var WaveWriter, data: var openArray[int16|uint16]) =
+  ## TODO
   ww.writeData16(data[0].addr, data.len * 2)
 
 
 # 24-bit
 
 proc writeData24Packed*(ww: var WaveWriter, data: pointer, len: Natural) =
+  ## TODO
   const WIDTH = 3
   assert len mod WIDTH == 0
 
@@ -823,13 +863,16 @@ proc writeData24Packed*(ww: var WaveWriter, data: pointer, len: Natural) =
 
 proc writeData24Packed*(ww: var WaveWriter,
                         data: var openArray[int8|uint8], len: Natural) =
+  ## TODO
   ww.writeData24Packed(data[0].addr, len)
 
 proc writeData24Packed*(ww: var WaveWriter, data: var openArray[int8|uint8]) =
+  ## TODO
   ww.writeData24Packed(data[0].addr, data.len)
 
 
 proc writeData24Unpacked*(ww: var WaveWriter, data: pointer, len: Natural) =
+  ## TODO
   assert len mod 4 == 0
 
   let writeBufferSize = (ww.writeBuffer.len div 3) * 3
@@ -859,15 +902,18 @@ proc writeData24Unpacked*(ww: var WaveWriter, data: pointer, len: Natural) =
 
 proc writeData24Unpacked*(ww: var WaveWriter,
                         data: var openArray[int32], len: Natural) =
+  ## TODO
   ww.writeData24Unpacked(data[0].addr, len * 4)
 
 proc writeData24Unpacked*(ww: var WaveWriter, data: var openArray[int32]) =
+  ## TODO
   ww.writeData24Unpacked(data[0].addr, data.len * 4)
 
 
 # 32-bit
 
 proc writeData32*(ww: var WaveWriter, data: pointer, len: Natural) =
+  ## TODO
   const WIDTH = 4
   assert len mod WIDTH == 0
 
@@ -893,15 +939,18 @@ proc writeData32*(ww: var WaveWriter, data: pointer, len: Natural) =
 
 proc writeData*(ww: var WaveWriter,
                 data: var openArray[int32|uint32|float32], len: Natural) =
+  ## TODO
   ww.writeData32(data[0].addr, len * 4)
 
 proc writeData*(ww: var WaveWriter, data: var openArray[int32|uint32|float32]) =
+  ## TODO
   ww.writeData32(data[0].addr, data.len * 4)
 
 
 # 64-bit
 
 proc writeData64*(ww: var WaveWriter, data: pointer, len: Natural) =
+  ## TODO
   const WIDTH = 8
   assert len mod WIDTH == 0
 
@@ -927,14 +976,17 @@ proc writeData64*(ww: var WaveWriter, data: pointer, len: Natural) =
 
 proc writeData*(ww: var WaveWriter,
                 data: var openArray[int64|uint64|float64], len: Natural) =
+  ## TODO
   ww.writeData64(data[0].addr, len * 8)
 
 proc writeData*(ww: var WaveWriter, data: var openArray[int64|uint64|float64]) =
+  ## TODO
   ww.writeData64(data[0].addr, data.len * 8)
 
 # }}}
 
 proc startChunk*(ww: var WaveWriter, id: string) =
+  ## TODO
   ww.checkFileClosed()
 
   ww.trackChunkSize = false
@@ -948,6 +1000,7 @@ proc startChunk*(ww: var WaveWriter, id: string) =
 
 
 proc endChunk*(ww: var WaveWriter) =
+  ## TODO
   ww.checkFileClosed()
 
   ww.trackChunkSize = false
@@ -971,6 +1024,7 @@ proc endChunk*(ww: var WaveWriter) =
 proc writeWaveFile*(filename: string, format: SampleFormat, sampleRate: Natural,
                     numChannels: Natural, bufSize: Natural = 4096,
                     endianness = littleEndian): WaveWriter =
+  ## TODO
   var ww = initWaveWriter()
   ww.filename = filename
 
@@ -997,6 +1051,7 @@ proc writeWaveFile*(filename: string, format: SampleFormat, sampleRate: Natural,
 
 
 proc writeFormatChunk*(ww: var WaveWriter) =
+  ## TODO
   ww.startChunk(FOURCC_FORMAT)
 
   var formatTag: uint16
@@ -1025,6 +1080,7 @@ proc writeFormatChunk*(ww: var WaveWriter) =
 
 
 proc writeCueChunk*(ww: var WaveWriter) =
+  ## TODO
   ww.startChunk(FOURCC_CUE)
   ww.writeUInt32(ww.regions.len.uint32)
 
@@ -1040,6 +1096,7 @@ proc writeCueChunk*(ww: var WaveWriter) =
 
 
 proc writeListChunk*(ww: var WaveWriter) =
+  ## TODO
   ww.startChunk(FOURCC_LIST)
   ww.writeFourCC(FOURCC_ASSOC_DATA)
 
@@ -1066,6 +1123,7 @@ proc writeListChunk*(ww: var WaveWriter) =
 
 
 proc startDataChunk*(ww: var WaveWriter) =
+  ## TODO
   ww.startChunk(FOURCC_DATA)
 
 proc endFile*(ww: var WaveWriter) =

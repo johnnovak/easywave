@@ -19,7 +19,7 @@ proc setRegions(ww: var WaveWriter) =
 # {{{ write8BitTestFile
 
 proc write8BitTestFile(outfile: string, endianness: Endianness) =
-  var ww = writeWaveFile(outfile, wf8BitInteger, SAMPLE_RATE, NUM_CHANNELS,
+  var ww = writeWaveFile(outfile, sf8BitInteger, SAMPLE_RATE, NUM_CHANNELS,
                          endianness = endianness)
   ww.writeFormatChunk()
   ww.startDataChunk()
@@ -59,7 +59,7 @@ proc write8BitTestFile(outfile: string, endianness: Endianness) =
 # {{{ write16BitTestFile
 
 proc write16BitTestFile(outfile: string, endianness: Endianness) =
-  var ww = writeWaveFile(outfile, wf16BitInteger, SAMPLE_RATE, NUM_CHANNELS,
+  var ww = writeWaveFile(outfile, sf16BitInteger, SAMPLE_RATE, NUM_CHANNELS,
                          endianness = endianness)
   ww.writeFormatChunk()
   ww.startDataChunk()
@@ -99,7 +99,7 @@ proc write16BitTestFile(outfile: string, endianness: Endianness) =
 # {{{ write24BitUnpackedTestFile
 
 proc write24BitUnpackedTestFile(outfile: string, endianness: Endianness) =
-  var ww = writeWaveFile(outfile, wf24BitInteger, SAMPLE_RATE, NUM_CHANNELS,
+  var ww = writeWaveFile(outfile, sf24BitInteger, SAMPLE_RATE, NUM_CHANNELS,
                          endianness = endianness)
   ww.writeFormatChunk()
   ww.startDataChunk()
@@ -139,7 +139,7 @@ proc write24BitUnpackedTestFile(outfile: string, endianness: Endianness) =
 # {{{ write24BitPackedTestFile
 
 proc write24BitPackedTestFile(outfile: string, endianness: Endianness) =
-  var ww = writeWaveFile(outfile, wf24BitInteger, SAMPLE_RATE, NUM_CHANNELS,
+  var ww = writeWaveFile(outfile, sf24BitInteger, SAMPLE_RATE, NUM_CHANNELS,
                          endianness = endianness)
   ww.writeFormatChunk()
   ww.startDataChunk()
@@ -184,7 +184,7 @@ proc write24BitPackedTestFile(outfile: string, endianness: Endianness) =
 # {{{ write32BitTestFile
 
 proc write32BitTestFile(outfile: string, endianness: Endianness) =
-  var ww = writeWaveFile(outfile, wf32BitInteger, SAMPLE_RATE, NUM_CHANNELS,
+  var ww = writeWaveFile(outfile, sf32BitInteger, SAMPLE_RATE, NUM_CHANNELS,
                          endianness = endianness)
   ww.writeFormatChunk()
   ww.startDataChunk()
@@ -224,7 +224,7 @@ proc write32BitTestFile(outfile: string, endianness: Endianness) =
 # {{{ write32BitFloatTestFile
 
 proc write32BitFloatTestFile(outfile: string, endianness: Endianness) =
-  var ww = writeWaveFile(outfile, wf32BitFloat, SAMPLE_RATE, NUM_CHANNELS,
+  var ww = writeWaveFile(outfile, sf32BitFloat, SAMPLE_RATE, NUM_CHANNELS,
                          endianness = endianness)
   ww.writeFormatChunk()
   ww.startDataChunk()
@@ -264,7 +264,7 @@ proc write32BitFloatTestFile(outfile: string, endianness: Endianness) =
 # {{{ write64BitFloatTestFile
 
 proc write64BitFloatTestFile(outfile: string, endianness: Endianness) =
-  var ww = writeWaveFile(outfile, wf64BitFloat, SAMPLE_RATE, NUM_CHANNELS,
+  var ww = writeWaveFile(outfile, sf64BitFloat, SAMPLE_RATE, NUM_CHANNELS,
                          endianness = endianness)
   ww.writeFormatChunk()
   ww.startDataChunk()
