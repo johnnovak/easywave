@@ -53,7 +53,7 @@ proc write8BitTestFile(outfile: string, endianness: Endianness) =
   ww.writeCueChunk()
   ww.writeListChunk()
 
-  ww.endFile()
+  ww.close()
 
 # }}}
 # {{{ write16BitTestFile
@@ -93,7 +93,7 @@ proc write16BitTestFile(outfile: string, endianness: Endianness) =
   ww.writeCueChunk()
   ww.writeListChunk()
 
-  ww.endFile()
+  ww.close()
 
 # }}}
 # {{{ write24BitUnpackedTestFile
@@ -133,7 +133,7 @@ proc write24BitUnpackedTestFile(outfile: string, endianness: Endianness) =
   ww.writeCueChunk()
   ww.writeListChunk()
 
-  ww.endFile()
+  ww.close()
 
 # }}}
 # {{{ write24BitPackedTestFile
@@ -178,7 +178,7 @@ proc write24BitPackedTestFile(outfile: string, endianness: Endianness) =
   ww.writeCueChunk()
   ww.writeListChunk()
 
-  ww.endFile()
+  ww.close()
 
 # }}}
 # {{{ write32BitTestFile
@@ -218,7 +218,7 @@ proc write32BitTestFile(outfile: string, endianness: Endianness) =
   ww.writeCueChunk()
   ww.writeListChunk()
 
-  ww.endFile()
+  ww.close()
 
 # }}}
 # {{{ write32BitFloatTestFile
@@ -258,7 +258,7 @@ proc write32BitFloatTestFile(outfile: string, endianness: Endianness) =
   ww.writeCueChunk()
   ww.writeListChunk()
 
-  ww.endFile()
+  ww.close()
 
 # }}}
 # {{{ write64BitFloatTestFile
@@ -298,7 +298,7 @@ proc write64BitFloatTestFile(outfile: string, endianness: Endianness) =
   ww.writeCueChunk()
   ww.writeListChunk()
 
-  ww.endFile()
+  ww.close()
 
 # }}}
 

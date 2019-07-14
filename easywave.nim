@@ -57,8 +57,6 @@ type
 type
   WaveReader* = object
     # read-only properties
-    filename:      string
-    endianness:    Endianness
     format:        SampleFormat
     sampleRate:    Natural
     numChannels:   Natural
@@ -82,11 +80,11 @@ proc initWaveReader(): WaveReader =
 
 func filename*(wr: WaveReader): string {.inline.} =
   ## The filename of the WAVE file.
-  wr.filename
+  wr.reader.filename
 
 func endianness*(wr: WaveReader): Endianness {.inline.} =
   ## The endianness of the WAVE file.
-  wr.endianness
+  wr.reader.endianness
 
 func format*(wr: WaveReader): SampleFormat {.inline.} =
   ## The format (bit-depth) of the audio data (populated by ``parseWaveFile``
@@ -131,142 +129,153 @@ proc doCheckChunkLimits(wr: var WaveReader, numBytes: Natural) =
 proc incChunkPos(wr: var WaveReader, numBytes: Natural) =
   inc(wr.chunkPos, numBytes)
 
-proc readBytes(wr: var WaveReader, dest: pointer, numBytes: Natural) =
-  wr.doCheckChunkLimits(numBytes)
-  try:
-    wr.reader.readData8(dest, numBytes)
-  except IOError:
-    raise newException(WaveReaderError,
-      fmt"Error reading file, cause: {getCurrentExceptionMsg()}")
-  wr.incChunkPos(numBytes)
+template readBuf(wr: var WaveReader, numBytes: Natural, read: untyped) =
+  doCheckChunkLimits(wr, numBytes)
+  read
+  incChunkPos(wr, numBytes)
 
 template readSingle(wr: var WaveReader, numBytes: Natural,
                     read: untyped): untyped =
-  wr.doCheckChunkLimits(numBytes)
-  try:
-    result = read
-  except IOError:
-    raise newException(WaveReaderError,
-      fmt"Error reading file, cause: {getCurrentExceptionMsg()}")
-  wr.incChunkPos(numBytes)
+  doCheckChunkLimits(wr, numBytes)
+  result = read
+  incChunkPos(wr, numBytes)
 
 # {{{ Single-value read
+
+proc readInt8*(wr: var WaveReader): int8 =
+  ## Reads a single ``int8`` value from the current file position. Raises
+  ## a ``WaveReadError`` on read errors.
+  wr.readSingle(sizeof(result), wr.reader.readInt8())
+
+proc readInt16*(wr: var WaveReader): int16 =
+  ## Reads a single ``int16`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readInt16())
+
+proc readInt32*(wr: var WaveReader): int32 =
+  ## Reads a single ``int32`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readInt32())
+
+proc readInt64*(wr: var WaveReader): int64 =
+  ## Reads a single ``int64`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readInt64())
+
+proc readUInt8*(wr: var WaveReader): uint8 =
+  ## Reads a single ``uint8`` value from the current file position. Raises
+  ## a ``WaveReadError`` on read errors.
+  wr.readSingle(sizeof(result), wr.reader.readUInt8())
+
+proc readUInt16*(wr: var WaveReader): uint16 =
+  ## Reads a single ``uint16`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readUInt16())
+
+proc readUInt32*(wr: var WaveReader): uint32 =
+  ## Reads a single ``uint32`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readUInt32())
+
+proc readUInt64*(wr: var WaveReader): uint64 =
+  ## Reads a single ``uint64`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readUInt64())
+
+proc readFloat32*(wr: var WaveReader): float32 =
+  ## Reads a single ``float32`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readFloat32())
+
+proc readFloat64*(wr: var WaveReader): float64 =
+  ## Reads a single ``float64`` value from the current file position and
+  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
+  ## read errors.
+  wr.readSingle(sizeof(result), wr.reader.readFloat64())
+
+proc readString*(wr: var WaveReader, numBytes: Natural): string =
+  ## TODO
+  wr.readSingle(numBytes, wr.reader.readString(numBytes))
 
 proc readFourCC*(wr: var WaveReader): string =
   ## Reads a 4-byte FourCC as a string from the current file position. Raises
   ## a ``WaveReadError`` on read errors.
   wr.readSingle(4, wr.reader.readString(4))
 
-proc readInt8*(wr: var WaveReader): int8 =
-  ## Reads a single ``int8`` value from the current file position. Raises
-  ## a ``WaveReadError`` on read errors.
-  wr.readSingle(1, wr.reader.readInt8())
-
-proc readInt16*(wr: var WaveReader): int16 =
-  ## Reads a single ``int16`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(2, wr.reader.readInt16())
-
-proc readInt32*(wr: var WaveReader): int32 =
-  ## Reads a single ``int32`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(4, wr.reader.readInt32())
-
-proc readInt64*(wr: var WaveReader): int64 =
-  ## Reads a single ``int64`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(8, wr.reader.readInt64())
-
-proc readUInt8*(wr: var WaveReader): uint8 =
-  ## Reads a single ``uint8`` value from the current file position. Raises
-  ## a ``WaveReadError`` on read errors.
-  wr.readSingle(1, wr.reader.readUInt8())
-
-proc readUInt16*(wr: var WaveReader): uint16 =
-  ## Reads a single ``uint16`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(2, wr.reader.readUInt16())
-
-proc readUInt32*(wr: var WaveReader): uint32 =
-  ## Reads a single ``uint32`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(4, wr.reader.readUInt32())
-
-proc readUInt64*(wr: var WaveReader): uint64 =
-  ## Reads a single ``uint64`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(8, wr.reader.readUInt64())
-
-proc readFloat32*(wr: var WaveReader): float32 =
-  ## Reads a single ``float32`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(4, wr.reader.readFloat32())
-
-proc readFloat64*(wr: var WaveReader): float64 =
-  ## Reads a single ``float64`` value from the current file position and
-  ## performs endianness conversion if necessary. Raises a ``WaveReadError`` on
-  ## read errors.
-  wr.readSingle(8, wr.reader.readFloat64())
-
-proc readString*(wr: var WaveReader, numBytes: Natural): string =
-  ## TODO
-  wr.readSingle(numBytes, wr.reader.readString(numBytes))
-
 # }}}
 # {{{ Buffered read (pointer variants)
 
 proc readData8*(wr: var WaveReader, dest: pointer, numItems: Natural) =
   ## TODO
-  wr.reader.readData8(dest, numItems)
+  wr.readBuf(numItems, wr.reader.readData8(dest, numItems))
 
 proc readData16*(wr: var WaveReader, dest: pointer, numItems: Natural) =
   ## TODO
-  wr.reader.readData16(dest, numItems)
+  wr.readBuf(numItems * 2, wr.reader.readData16(dest, numItems))
 
 proc readData24Unpacked*(wr: var WaveReader, dest: pointer, numItems: Natural) =
   ## TODO
-  wr.reader.readData24Unpacked(dest, numItems)
+  wr.readBuf(numItems * 4, wr.reader.readData24Unpacked(dest, numItems))
 
 proc readData24Packed*(wr: var WaveReader, dest: pointer, numItems: Natural) =
   ## TODO
-  wr.reader.readData24Packed(dest, numItems)
+  wr.readBuf(numItems * 3, wr.reader.readData24Packed(dest, numItems))
 
 proc readData32*(wr: var WaveReader, dest: pointer, numItems: Natural) =
   ## TODO
-  wr.reader.readData32(dest, numItems)
+  wr.readBuf(numItems * 4, wr.reader.readData32(dest, numItems))
 
 proc readData64*(wr: var WaveReader, dest: pointer, numItems: Natural) =
   ## TODO
-  wr.reader.readData64(dest, numItems)
+  wr.readBuf(numItems * 8, wr.reader.readData64(dest, numItems))
 
 # }}}
 # {{{ Buffered read (openArray variants)
 proc readData24Unpacked*(wr: var WaveReader, dest: var openArray[int32],
                          numItems: Natural) =
   ## TODO
-  wr.reader.readData24Unpacked(dest, numItems)
+  wr.readBuf(numItems * 4, wr.reader.readData24Unpacked(dest, numItems))
+
+proc readData24Unpacked*(wr: var WaveReader, dest: var openArray[int32]) =
+  ## TODO
+  wr.readData24Unpacked(dest, dest.len)
 
 proc readData24Packed*(wr: var WaveReader, dest: var openArray[uint8],
                        numItems: Natural) =
   ## TODO
-  wr.reader.readData24Packed(dest, numItems)
+  wr.readBuf(numItems * 3, wr.reader.readData24Packed(dest, numItems))
 
-proc readData*(
-  wr: var WaveReader,
-  dest: var openArray[int8|uint8|int16|uint16|int32|uint32|float32|int64|uint64|float64],
-  numItems: Natural) =
+proc readData24Packed*(wr: var WaveReader, dest: var openArray[uint8]) =
+  ## TODO
+  wr.readData24Packed(dest, dest.len div 3)
 
+# TODO find better name
+type AllDataBufferTypes = int8|uint8|int16|uint16|int32|uint32|float32|int64|uint64|float64
+
+proc getByteWidth(arr: var openArray[AllDataBufferTypes]): int =
+  if   typeof(arr) is openArray[int8|uint8]:           result = 1
+  elif typeof(arr) is openArray[int16|uint16]:         result = 2
+  elif typeof(arr) is openArray[int32|uint32|float32]: result = 4
+  elif typeof(arr) is openArray[int64|uint64|float64]: result = 8
+
+proc readData*(wr: var WaveReader, dest: var openArray[AllDataBufferTypes],
+               numItems: Natural) =
   ## Reads `numItems` number of ``int8|uint8`` values into `dest` from the
   ## current file position and performs endianness conversion if necessary.
   ## Raises a ``WaveReadError`` on read errors.
-  wr.reader.readData(dest, numItems)
+  # TODO
+  wr.readBuf(numItems * getByteWidth(dest), wr.reader.readData(dest, numItems))
+
+proc readData*(wr: var WaveReader, dest: var openArray[AllDataBufferTypes]) =
+  # TODO
+  wr.readData(dest, dest.len)
 
 # }}}
 
@@ -421,8 +430,9 @@ proc readRegionLabelsAndEndOffsetsFromListChunk(wr: var WaveReader) =
       let cuePointId = wr.readUInt32()
 
       var textSize = subChunkSize.int - 4
+      # TODO use read string
       var text = newString(textSize-1)  # don't read the terminating zero byte
-      wr.readBytes(text[0].addr, textSize-1)
+      wr.readData8(text[0].addr, textSize-1)
 
       if wr.regions.hasKey(cuePointId):
         wr.regions[cuePointId].label = text
@@ -468,13 +478,11 @@ proc readWaveHeader(wr: var WaveReader) =
 
   let id = wr.readFourCC()
   case id
-  of FOURCC_RIFF_LE: wr.endianness = littleEndian
-  of FOURCC_RIFF_BE: wr.endianness = bigEndian
+  of FOURCC_RIFF_LE: wr.reader.endianness = littleEndian
+  of FOURCC_RIFF_BE: wr.reader.endianness = bigEndian
   else:
     raise newException(WaveReaderError, "Not a WAVE file " &
                 fmt"('{FOURCC_RIFF_LE}' or '{FOURCC_RIFF_BE}' chunk not found)")
-
-  wr.reader.endianness = wr.endianness
 
   wr.riffChunkSize = wr.readUInt32()
 
@@ -531,378 +539,175 @@ proc parseWaveFile*(filename: string, readRegions: bool = false,
   else:
     raise newException(WaveReaderError, fmt"'{FOURCC_DATA}' chunk not found")
 
+
+proc close*(wr: var WaveReader) =
+  # TODO
+  wr.reader.close()
+
 # }}}
 # {{{ Writer
 #
 type
   WaveWriter* = object
-    filename:       string
-    endianness:     Endianness
+    # read-only properties
     format:         SampleFormat
     sampleRate:     Natural
     numChannels:    Natural
     regions:        RegionTable
 
-    file:           File
-    writeBuffer:    seq[uint8]
+    # private
+    writer:         BufferedWriter
     chunkSize:      seq[int64]
     chunkSizePos:   seq[int64]
     trackChunkSize: bool
-    swapEndian:     bool
-
-  WaveWriterError* = object of Exception
 
 
 proc initWaveWriter*(): WaveWriter =
   ## TODO
   result.regions = initOrderedTable[uint32, Region]()
 
-proc filename*(ww: WaveWriter): string {.inline.} =
+func filename*(ww: WaveWriter): string {.inline.} =
   ## TODO
-  ww.filename
+  ww.writer.filename
 
-proc endianness*(ww: WaveWriter): Endianness {.inline.} =
+func endianness*(ww: WaveWriter): Endianness {.inline.} =
   ## TODO
-  ww.endianness
+  ww.writer.endianness
 
-proc format*(ww: WaveWriter): SampleFormat {.inline.} =
+func format*(ww: WaveWriter): SampleFormat {.inline.} =
   ## TODO
   ww.format
 
-proc sampleRate*(ww: WaveWriter): Natural {.inline.} =
+func sampleRate*(ww: WaveWriter): Natural {.inline.} =
   ## TODO
   ww.sampleRate
 
-proc numChannels*(ww: WaveWriter): Natural {.inline.} =
+func numChannels*(ww: WaveWriter): Natural {.inline.} =
   ## TODO
   ww.numChannels
 
-proc `regions=`*(ww: var WaveWriter, regions: RegionTable) {.inline.} =
+func `regions=`*(ww: var WaveWriter, regions: RegionTable) {.inline.} =
   ## TODO
   ww.regions = regions
 
-proc regions*(ww: WaveWriter): RegionTable {.inline.} =
+func regions*(ww: WaveWriter): RegionTable {.inline.} =
   ## TODO
   ww.regions
 
-proc checkFileClosed(ww: WaveWriter) =
-  if ww.file == nil: raise newException(WaveReaderError, "File closed")
+proc checkFileClosed(ww: var WaveWriter) =
+  if ww.writer.file == nil:
+    raise newException(WaveReaderError, "File closed")
 
-proc raiseWaveWriteError() {.noreturn.} =
-  raise newException(WaveWriterError, "Error writing file")
-
-proc writeBuf(ww: var WaveWriter, data: pointer, len: Natural) =
-  ww.checkFileClosed()
-  if writeBuffer(ww.file, data, len) != len:
-    raiseWaveWriteError()
+proc incChunkSize(ww: var WaveWriter, numBytes: Natural) =
   if ww.trackChunkSize and ww.chunkSize.len > 0:
-    inc(ww.chunkSize[ww.chunkSize.high], len)
+    inc(ww.chunkSize[ww.chunkSize.high], numBytes)
+
+template writeInternal(ww: var WaveWriter, numBytes: Natural, write: untyped) =
+  checkFileClosed(ww)
+  write
+  incChunkSize(ww, numBytes)
 
 # {{{ Single-value write
 
-proc writeFourCC*(ww: var WaveWriter, fourCC: string) =
-  ## TODO
-  var buf = fourCC
-  ww.writeBuf(buf[0].addr, 4)
-
-proc writeString*(ww: var WaveWriter, s: string) =
-  ## TODO
-  var buf = s
-  ww.writeBuf(buf[0].addr, s.len)
-
 proc writeInt8*(ww: var WaveWriter, d: int8) =
-  ## TODO
-  var dest = d
-  ww.writeBuf(dest.addr, 1)
+  ww.writeInternal(sizeof(d), ww.writer.writeInt8(d))
 
 proc writeInt16*(ww: var WaveWriter, d: int16) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: int16
-    swapEndian16(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 2)
-  else:
-    ww.writeBuf(src.addr, 2)
+  ww.writeInternal(sizeof(d), ww.writer.writeInt16(d))
 
 proc writeInt32*(ww: var WaveWriter, d: int32) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: int32
-    swapEndian32(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 4)
-  else:
-    ww.writeBuf(src.addr, 4)
+  ww.writeInternal(sizeof(d), ww.writer.writeInt32(d))
 
 proc writeInt64*(ww: var WaveWriter, d: int64) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: int64
-    swapEndian64(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 8)
-  else:
-    ww.writeBuf(src.addr, 8)
+  ww.writeInternal(sizeof(d), ww.writer.writeInt64(d))
 
 proc writeUInt8*(ww: var WaveWriter, d: uint8) =
-  ## TODO
-  var dest = d
-  ww.writeBuf(dest.addr, 1)
+  ww.writeInternal(sizeof(d), ww.writer.writeUInt8(d))
 
 proc writeUInt16*(ww: var WaveWriter, d: uint16) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: int16
-    swapEndian16(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 2)
-  else:
-    ww.writeBuf(src.addr, 2)
+  ww.writeInternal(sizeof(d), ww.writer.writeUInt16(d))
 
 proc writeUInt32*(ww: var WaveWriter, d: uint32) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: int32
-    swapEndian32(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 4)
-  else:
-    ww.writeBuf(src.addr, 4)
+  ww.writeInternal(sizeof(d), ww.writer.writeUInt32(d))
 
 proc writeUInt64*(ww: var WaveWriter, d: uint64) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: int64
-    swapEndian64(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 8)
-  else:
-    ww.writeBuf(src.addr, 8)
+  ww.writeInternal(sizeof(d), ww.writer.writeUInt64(d))
 
 proc writeFloat32*(ww: var WaveWriter, d: float32) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: float32
-    swapEndian32(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 4)
-  else:
-    ww.writeBuf(src.addr, 4)
+  ww.writeInternal(sizeof(d), ww.writer.writeFloat32(d))
 
 proc writeFloat64*(ww: var WaveWriter, d: float64) =
-  ## TODO
-  var src = d
-  if ww.swapEndian:
-    var dest: float64
-    swapEndian64(dest.addr, src.addr)
-    ww.writeBuf(dest.addr, 8)
-  else:
-    ww.writeBuf(src.addr, 8)
+  ww.writeInternal(sizeof(d), ww.writer.writeFloat64(d))
+
+proc writeString*(ww: var WaveWriter, s: string) =
+  ww.writeInternal(s.len, ww.writer.writeString(s))
+
+proc writeString*(ww: var WaveWriter, s: string, numBytes: Natural) =
+  ww.writeInternal(numBytes, ww.writer.writeString(s, numBytes))
+
+proc writeFourCC*(ww: var WaveWriter, fourCC: string) =
+  ww.writeInternal(4, ww.writer.writeString(fourCC, 4))
 
 # }}}
-# {{{ Buffered write
+# {{{ Buffered write (pointer variants)
 
-# 8-bit
-
-proc writeData*(ww: var WaveWriter, data: var openArray[int8|uint8],
-                len: Natural) =
+proc writeData8*(ww: var WaveWriter, data: pointer, numItems: Natural) =
   ## TODO
-  ww.writeBuf(data[0].addr, len)
+  ww.writeInternal(numItems, ww.writer.writeData8(data, numItems))
 
-proc writeData*(ww: var WaveWriter, data: var openArray[int8|uint8]) =
+proc writeData16*(ww: var WaveWriter, data: pointer, numItems: Natural) =
   ## TODO
-  ww.writeBuf(data[0].addr, data.len)
+  ww.writeInternal(numItems * 2, ww.writer.writeData16(data, numItems))
 
-
-# 16-bit
-
-proc writeData16*(ww: var WaveWriter, data: pointer, len: Natural) =
+proc writeData32*(ww: var WaveWriter, data: pointer, numItems: Natural) =
   ## TODO
-  const WIDTH = 2
-  assert len mod WIDTH == 0
+  ww.writeInternal(numItems * 4, ww.writer.writeData32(data, numItems))
 
-  if ww.swapEndian:
-    let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
-    var
-      src = cast[ptr UncheckedArray[uint8]](data)
-      pos = 0
-      destPos = 0
-
-    while pos < len:
-      swapEndian16(ww.writeBuffer[destPos].addr, src[pos].addr)
-      inc(destPos, WIDTH)
-      inc(pos, WIDTH)
-      if destPos >= writeBufferSize:
-        ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
-        destPos = 0
-
-    if destPos > 0:
-      ww.writeBuf(ww.writeBuffer[0].addr, destPos)
-  else:
-    ww.writeBuf(data, len)
-
-proc writeData*(ww: var WaveWriter, data: var openArray[int16|uint16],
-                len: Natural) =
+proc writeData24Packed*(ww: var WaveWriter, data: pointer, numItems: Natural) =
   ## TODO
-  ww.writeData16(data[0].addr, len * 2)
+  ww.writeInternal(numItems * 3, ww.writer.writeData24Packed(data, numItems))
 
-proc writeData*(ww: var WaveWriter, data: var openArray[int16|uint16]) =
+proc writeData24Unpacked*(ww: var WaveWriter, data: pointer, numItems: Natural) =
   ## TODO
-  ww.writeData16(data[0].addr, data.len * 2)
+  ww.writeInternal(numItems * 4, ww.writer.writeData24Unpacked(data, numItems))
 
-
-# 24-bit
-
-proc writeData24Packed*(ww: var WaveWriter, data: pointer, len: Natural) =
+proc writeData64*(ww: var WaveWriter, data: pointer, numItems: Natural) =
   ## TODO
-  const WIDTH = 3
-  assert len mod WIDTH == 0
+  ww.writeInternal(numItems * 8, ww.writer.writeData64(data, numItems))
 
-  if ww.swapEndian:
-    let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
-    var
-      src = cast[ptr UncheckedArray[uint8]](data)
-      pos = 0
-      destPos = 0
+# }}}
+# {{{ Buffered write (openArray variants)
 
-    while pos < len:
-      ww.writeBuffer[destPos]   = src[pos+2]
-      ww.writeBuffer[destPos+1] = src[pos+1]
-      ww.writeBuffer[destPos+2] = src[pos]
+proc writeData*(ww: var WaveWriter, src: var openArray[AllDataBufferTypes],
+                numItems: Natural) =
+  ## TODO
+  ww.writeInternal(numItems * getByteWidth(src),
+                   ww.writer.writeData(src, numItems))
 
-      inc(destPos, WIDTH)
-      inc(pos, WIDTH)
-      if destPos >= writeBufferSize:
-        ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
-        destPos = 0
-
-    if destPos > 0:
-      ww.writeBuf(ww.writeBuffer[0].addr, destPos)
-  else:
-    ww.writeBuf(data, len)
+proc writeData*(ww: var WaveWriter, src: var openArray[AllDataBufferTypes]) =
+  ## TODO
+  ww.writeData(src, src.len)
 
 proc writeData24Packed*(ww: var WaveWriter,
-                        data: var openArray[int8|uint8], len: Natural) =
+                        src: var openArray[int8|uint8], numItems: Natural) =
   ## TODO
-  ww.writeData24Packed(data[0].addr, len)
+  ww.writeInternal(numItems * 3,
+                   ww.writer.writeData24Packed(src, numItems))
 
-proc writeData24Packed*(ww: var WaveWriter, data: var openArray[int8|uint8]) =
+proc writeData24Packed*(ww: var WaveWriter, src: var openArray[int8|uint8]) =
   ## TODO
-  ww.writeData24Packed(data[0].addr, data.len)
+  ww.writeData24Packed(src, src.len div 3)
 
-
-proc writeData24Unpacked*(ww: var WaveWriter, data: pointer, len: Natural) =
+proc writeData24Unpacked*(ww: var WaveWriter, src: var openArray[int32|uint32],
+                          numItems: Natural) =
   ## TODO
-  assert len mod 4 == 0
-
-  let writeBufferSize = (ww.writeBuffer.len div 3) * 3
-  var
-    src = cast[ptr UncheckedArray[uint8]](data)
-    pos = 0
-    destPos = 0
-
-  while pos < len:
-    if ww.swapEndian:
-      ww.writeBuffer[destPos]   = src[pos+2]
-      ww.writeBuffer[destPos+1] = src[pos+1]
-      ww.writeBuffer[destPos+2] = src[pos]
-    else:
-      ww.writeBuffer[destPos]   = src[pos]
-      ww.writeBuffer[destPos+1] = src[pos+1]
-      ww.writeBuffer[destPos+2] = src[pos+2]
-
-    inc(destPos, 3)
-    inc(pos, 4)
-    if destPos >= writeBufferSize:
-      ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
-      destPos = 0
-
-  if destPos > 0:
-    ww.writeBuf(ww.writeBuffer[0].addr, destPos)
+  ww.writeInternal(numItems * 4,
+                   ww.writer.writeData24Unpacked(src, numItems))
 
 proc writeData24Unpacked*(ww: var WaveWriter,
-                        data: var openArray[int32], len: Natural) =
+                          src: var openArray[int32|uint32]) =
   ## TODO
-  ww.writeData24Unpacked(data[0].addr, len * 4)
-
-proc writeData24Unpacked*(ww: var WaveWriter, data: var openArray[int32]) =
-  ## TODO
-  ww.writeData24Unpacked(data[0].addr, data.len * 4)
-
-
-# 32-bit
-
-proc writeData32*(ww: var WaveWriter, data: pointer, len: Natural) =
-  ## TODO
-  const WIDTH = 4
-  assert len mod WIDTH == 0
-
-  if ww.swapEndian:
-    let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
-    var
-      src = cast[ptr UncheckedArray[uint8]](data)
-      pos = 0
-      destPos = 0
-
-    while pos < len:
-      swapEndian32(ww.writeBuffer[destPos].addr, src[pos].addr)
-      inc(destPos, WIDTH)
-      inc(pos, WIDTH)
-      if destPos >= writeBufferSize:
-        ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
-        destPos = 0
-
-    if destPos > 0:
-      ww.writeBuf(ww.writeBuffer[0].addr, destPos)
-  else:
-    ww.writeBuf(data, len)
-
-proc writeData*(ww: var WaveWriter,
-                data: var openArray[int32|uint32|float32], len: Natural) =
-  ## TODO
-  ww.writeData32(data[0].addr, len * 4)
-
-proc writeData*(ww: var WaveWriter, data: var openArray[int32|uint32|float32]) =
-  ## TODO
-  ww.writeData32(data[0].addr, data.len * 4)
-
-
-# 64-bit
-
-proc writeData64*(ww: var WaveWriter, data: pointer, len: Natural) =
-  ## TODO
-  const WIDTH = 8
-  assert len mod WIDTH == 0
-
-  if ww.swapEndian:
-    let writeBufferSize = (ww.writeBuffer.len div WIDTH) * WIDTH
-    var
-      src = cast[ptr UncheckedArray[uint8]](data)
-      pos = 0
-      destPos = 0
-
-    while pos < len:
-      swapEndian64(ww.writeBuffer[destPos].addr, src[pos].addr)
-      inc(destPos, WIDTH)
-      inc(pos, WIDTH)
-      if destPos >= writeBufferSize:
-        ww.writeBuf(ww.writeBuffer[0].addr, writeBufferSize)
-        destPos = 0
-
-    if destPos > 0:
-      ww.writeBuf(ww.writeBuffer[0].addr, destPos)
-  else:
-    ww.writeBuf(data, len)
-
-proc writeData*(ww: var WaveWriter,
-                data: var openArray[int64|uint64|float64], len: Natural) =
-  ## TODO
-  ww.writeData64(data[0].addr, len * 8)
-
-proc writeData*(ww: var WaveWriter, data: var openArray[int64|uint64|float64]) =
-  ## TODO
-  ww.writeData64(data[0].addr, data.len * 8)
+  ww.writeData24Unpacked(src, src.len)
 
 # }}}
 
@@ -913,7 +718,7 @@ proc startChunk*(ww: var WaveWriter, id: string) =
   ww.trackChunkSize = false
 
   ww.writeFourCC(id)
-  ww.chunkSizePos.add(getFilePos(ww.file))
+  ww.chunkSizePos.add(getFilePos(ww.writer.file))
   ww.writeUInt32(0)  # endChunk() will update this with the correct value
   ww.chunkSize.add(0)
 
@@ -929,9 +734,9 @@ proc endChunk*(ww: var WaveWriter) =
   var chunkSize = ww.chunkSize.pop()
   if chunkSize mod 2 > 0:
     ww.writeInt8(0)  # padding byte (chunks must contain even number of bytes)
-  setFilePos(ww.file, ww.chunkSizePos.pop())
+  setFilePos(ww.writer.file, ww.chunkSizePos.pop())
   ww.writeUInt32(chunkSize.uint32)
-  setFilePos(ww.file, 0, fspEnd)
+  setFilePos(ww.writer.file, 0, fspEnd)
 
   # Add real (potentially padded) chunk size to the parent chunk size
   if ww.chunkSize.len > 0:
@@ -947,10 +752,8 @@ proc writeWaveFile*(filename: string, format: SampleFormat, sampleRate: Natural,
                     endianness = littleEndian): WaveWriter =
   ## TODO
   var ww = initWaveWriter()
-  ww.filename = filename
 
-  if not open(ww.file, ww.filename, fmWrite):
-    raise newException(WaveWriterError, "Error opening file for writing")
+  ww.writer = createFile(filename, bufSize, endianness)
 
   ww.format = format
   ww.sampleRate = sampleRate
@@ -959,11 +762,8 @@ proc writeWaveFile*(filename: string, format: SampleFormat, sampleRate: Natural,
   ww.chunkSize = newSeq[int64]()
   ww.chunkSizePos = newSeq[int64]()
   ww.trackChunkSize = false
-  ww.writeBuffer = newSeq[uint8](bufSize)
-  ww.endianness = endianness
-  ww.swapEndian = cpuEndian != endianness
 
-  case ww.endianness:
+  case ww.writer.endianness:
   of littleEndian: ww.startChunk(FOURCC_RIFF_LE)
   of bigEndian:    ww.startChunk(FOURCC_RIFF_BE)
 
@@ -1047,11 +847,10 @@ proc startDataChunk*(ww: var WaveWriter) =
   ## TODO
   ww.startChunk(FOURCC_DATA)
 
-proc endFile*(ww: var WaveWriter) =
+proc close*(ww: var WaveWriter) =
   ww.checkFileClosed()
   ww.endChunk()
-  close(ww.file)
-  ww.file = nil
+  ww.writer.close()
 
 # }}}
 
