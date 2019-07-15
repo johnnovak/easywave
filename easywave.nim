@@ -561,6 +561,7 @@ type
     chunkSizePos:   seq[int64]
     trackChunkSize: bool
 
+  WaveWriterError* = object of Exception
 
 proc initWaveWriter*(): WaveWriter =
   ## TODO
@@ -596,7 +597,7 @@ func regions*(ww: WaveWriter): RegionTable {.inline.} =
 
 proc checkFileClosed(ww: var WaveWriter) =
   if ww.writer.file == nil:
-    raise newException(WaveReaderError, "File closed")
+    raise newException(WaveWriterError, "File closed")
 
 proc incChunkSize(ww: var WaveWriter, numBytes: Natural) =
   if ww.trackChunkSize and ww.chunkSize.len > 0:
