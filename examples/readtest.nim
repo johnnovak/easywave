@@ -69,8 +69,11 @@ proc main() =
   var fname = os.paramStr(1)
   let wi: WaveInfo = openWaveFile(fname, readRegions=true)
 
+
   wi.reader.cursor = wi.dataCursor
   let dataChunk = wi.reader.currentChunk
+
+  echo dataChunk
 
   printWaveInfo(wi, dataChunk)
   printRegionInfo(wi)

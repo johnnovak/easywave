@@ -22,14 +22,14 @@ const
   FourCC_WAVE_ltxt* = "ltxt"  ## Labeled text chunk ID
   FourCC_WAVE_rgn*  = "rgn "  ## Region purpose ID
 
-  WaveFormatPCM = 1
-  WaveFormatIEEEFloat = 3
+  WaveFormatPCM = 1'u16
+  WaveFormatIEEEFloat = 3'u16
 
 type
   SampleFormat* = enum
-    sfPCM       = (0, "PCM"),
-    sfIEEEFloat = (1, "IEEE Float"),
-    sfUnknown   = (2, "Unknown")
+    sfPCM     = (0, "PCM"),
+    sfFloat   = (1, "IEEE Float"),
+    sfUnknown = (2, "Unknown")
 
   Region* = object
     ## represents a marker (if length is 0) or a region
@@ -44,6 +44,10 @@ type
     bitsPerSample*: Natural
     sampleRate*:    Natural
     numChannels*:   Natural
+
+
+proc initRegions*(): RegionTable =
+  result = initOrderedTable[uint32, Region]()
 
 # }}}
 # {{{ Reader
@@ -139,10 +143,6 @@ proc readData24Packed*(br: var BufferedReader, dest: var openArray[int8|uint8]) 
 
 
 proc readFormatChunk*(rr): WaveFormat =
-  ## Reads the format chunk from the current file position and sets the format
-  ## info in the ``WaveReader`` object on success. Raises
-  ## a ``WaveReaderError`` on any error (e.g. read error, chunk not found,
-  ## unsupported format etc.).
   {.hint[XDeclaredButNotUsed]: off.}
   let
     format         = rr.read(uint16)
@@ -159,7 +159,7 @@ proc readFormatChunk*(rr): WaveFormat =
 
   wf.sampleFormat = case format
   of WaveFormatPCM:       sfPCM
-  of WaveFormatIEEEFloat: sfIEEEFloat
+  of WaveFormatIEEEFloat: sfFloat
   else:                   sfUnknown
 
   result = wf
@@ -187,7 +187,8 @@ proc readRegionIdsAndStartOffsetsFromCueChunk*(rr; regions: var RegionTable) =
         regions[cuePointId].startFrame = sampleOffset
 
 
-proc readRegionLabelsAndEndOffsetsFromListChunk*(rr; regions: var RegionTable) =
+proc readRegionLabelsAndEndOffsetsFromListChunk*(rr;
+                                                 regions: var RegionTable) =
   while rr.hasNextChunk():
     let ci = rr.nextChunk()
 
@@ -255,7 +256,7 @@ proc openWaveFile*(filename: string, readRegions: bool = false,
 
   result.reader = rr
   result.dataCursor = dataCursor.get
-  result.regions = initOrderedTable[uint32, Region]()
+  result.regions = initRegions()
 
   if readRegions and cueCursor.isSome and adtlCursor.isSome:
     rr.cursor = cueCursor.get
@@ -266,61 +267,10 @@ proc openWaveFile*(filename: string, readRegions: bool = false,
     rr.readRegionLabelsAndEndOffsetsFromListChunk(result.regions)
 
 
-#[
-  let (fmtFound, fmtChunk) = rr.findChunk(FourCC_WAVE_fmt)
-  if fmtFound:
-    rr.setCurrentChunk(fmtChunk)
-    rr.readFormatChunk()
-  else:
-    raise newException(WaveReaderError, fmt"'{FourCC_WAVE_fmt}' chunk not found")
-
-  if readRegions:
-    let (cueFound, cueChunk) = rr.findChunk(FourCC_WAVE_cue)
-    let (listFound, listChunk) = rr.findChunk(FourCC_LIST)
-    if cueFound and listFound:
-      rr.readRegions(cueChunk, listChunk)
-
-  let (dataFound, dataChunk) = rr.findChunk(FourCC_WAVE_data)
-  if dataFound:
-    rr.setCurrentChunk(dataChunk)
-    return wr
-  else:
-    raise newException(WaveReaderError, fmt"'{FourCC_WAVE_data}' chunk not found")
-]#
-
 # }}}
 # {{{ Writer
 
-#[
-type
-  WaveWriter* = object
-    # read-only properties
-    format:         SampleFormat
-    sampleRate:     Natural
-    numChannels:    Natural
-    regions:        RegionTable
-
-  WaveWriterError* = object of Exception
-
-proc initWaveWriter*(): WaveWriter =
-  result.regions = initOrderedTable[uint32, Region]()
-
-func format*(ww: WaveWriter): SampleFormat {.inline.} =
-  ww.format
-
-func sampleRate*(ww: WaveWriter): Natural {.inline.} =
-  ww.sampleRate
-
-func numChannels*(ww: WaveWriter): Natural {.inline.} =
-  ww.numChannels
-
-func `regions=`*(ww: var WaveWriter, regions: RegionTable) {.inline.} =
-  ww.regions = regions
-
-func regions*(ww: WaveWriter): RegionTable {.inline.} =
-  ww.regions
-
-]#
+using rw: RiffWriter
 
 #[
 proc writeData24Packed*(ww: var WaveWriter, data: pointer, numItems: Natural) =
@@ -435,102 +385,66 @@ proc writeData24Unpacked*(bw: var BufferedWriter,
 
 ]#
 
-#[
-proc writeWaveFile*(filename: string, format: SampleFormat, sampleRate: Natural,
-                    numChannels: Natural, bufSize: Natural = 4096,
-                    endianness = littleEndian): WaveWriter =
-  ## TODO
-  var ww = initWaveWriter()
+proc writeFormatChunk*(rw; wf: WaveFormat) =
+  rw.beginChunk(FourCC_WAVE_fmt)
 
-  ww.writer = createFile(filename, bufSize, endianness)
+  var formatTag: uint16 = case wf.sampleFormat:
+  of sfPCM:     WaveFormatPCM
+  of sfFloat:   WaveFormatIEEEFloat
+  of sfUnknown: 0
 
-  ww.format = format
-  ww.sampleRate = sampleRate
-  ww.numChannels = numChannels
+  var blockAlign = (wf.numChannels * wf.bitsPerSample div 8).uint16
+  var avgBytesPerSec = wf.sampleRate.uint32 * blockAlign.uint32
 
-  ww.chunkSize = newSeq[int64]()
-  ww.chunkSizePos = newSeq[int64]()
-  ww.trackChunkSize = false
+  rw.write(formatTag)
+  rw.write(wf.numChannels.uint16)
+  rw.write(wf.sampleRate.uint32)
+  rw.write(avgBytesPerSec)
+  rw.write(blockAlign)
+  rw.write(wf.bitsPerSample.uint16)
+  # TODO write extended header for float formats (and for 24 bit) ?
 
-  case ww.writer.endianness:
-  of littleEndian: ww.startChunk(FourCC_RIFF_LE)
-  of bigEndian:    ww.startChunk(FourCC_RIFF_BE)
-
-  ww.writeFourCC(FourCC_WAVE)
-  result = ww
+  rw.endChunk()
 
 
-proc writeFormatChunk*(ww: var WaveWriter) =
-  ## TODO
-  ww.startChunk(FourCC_WAVE_fmt)
+proc writeCueChunk*(rw; regions: RegionTable) =
+  rw.beginChunk(FourCC_WAVE_cue)
+  rw.write(regions.len.uint32)  # number of markers/regions
 
-  var formatTag: uint16
-  var bitsPerSample: uint16
+  for id, region in regions.pairs:
+    rw.write(id)                 # cuePointId
+    rw.write(0'u32)              # position (unused if dataChunkId is 'data')
+    rw.writeFourCC(FourCC_WAVE_data) # dataChunkId
+    rw.write(0'u32)              # chunkStart (unused if dataChunkId is 'data')
+    rw.write(0'u32)              # blockStart (unused if dataChunkId is 'data')
+    rw.write(region.startFrame)  # sampleOffset
 
-  case ww.format
-  of sf8BitInteger:  formatTag = WaveFormatPCM;       bitsPerSample = 8
-  of sf16BitInteger: formatTag = WaveFormatPCM;       bitsPerSample = 16
-  of sf24BitInteger: formatTag = WaveFormatPCM;       bitsPerSample = 24
-  of sf32BitInteger: formatTag = WaveFormatPCM;       bitsPerSample = 32
-  of sf32BitFloat:   formatTag = WaveFormatIEEEFloat; bitsPerSample = 32
-  of sf64BitFloat:   formatTag = WaveFormatIEEEFloat; bitsPerSample = 64
-
-  var blockAlign = (ww.numChannels.uint16 * bitsPerSample div 8).uint16
-  var avgBytesPerSec = ww.sampleRate.uint32 * blockAlign
-
-  ww.writeUInt16(formatTag)
-  ww.writeUInt16(ww.numChannels.uint16)
-  ww.writeUInt32(ww.sampleRate.uint32)
-  ww.writeUInt32(avgBytesPerSec)
-  ww.writeUInt16(blockAlign)
-  ww.writeUInt16(bitsPerSample)
-  # TODO write extended header for float formats (and for 24 bit?)
-
-  ww.endChunk()
+  rw.endChunk()
 
 
-proc writeCueChunk*(ww: var WaveWriter) =
-  ## TODO
-  ww.startChunk(FourCC_WAVE_cue)
-  ww.writeUInt32(ww.regions.len.uint32)
+proc writeAdtlListChunk*(rw; regions: RegionTable) =
+  rw.beginListChunk(FourCC_WAVE_adtl)
 
-  for id, region in ww.regions.pairs():
-    ww.writeUInt32(id)          # cuePointId
-    ww.writeUInt32(0)           # position (unused if dataChunkId is 'data')
-    ww.writeFourCC(FourCC_WAVE_data) # dataChunkId
-    ww.writeUInt32(0)           # chunkStart (unused if dataChunkId is 'data')
-    ww.writeUInt32(0)           # blockStart (unused if dataChunkId is 'data')
-    ww.writeUInt32(region.startFrame) # sampleOffset
+  for id, region in regions.pairs:
+    rw.beginChunk(FourCC_WAVE_labl)
+    rw.write(id)               # cuePointId
+    rw.writeStr(region.label)  # text
+    rw.write(0'u8)             # null terminator
+    rw.endChunk()
 
-  ww.endChunk()
+  for id, region in regions.pairs:
+    if region.length > 0:
+      rw.beginChunk(FourCC_WAVE_ltxt)
+      rw.write(id)                     # cuePointId
+      rw.write(region.length.uint32)   # sampleLength
+      rw.writeFourCC(FourCC_WAVE_rgn)  # purposeId
+      rw.write(0'u16)                  # country (ignored)
+      rw.write(0'u16)                  # language (ignored)
+      rw.write(0'u16)                  # dialect (ignored)
+      rw.write(0'u16)                  # codePage (ignored)
+      rw.endChunk()
 
-
-proc writeListChunk*(ww: var WaveWriter) =
-  ## TODO
-  ww.startChunk(FourCC_LIST)
-  ww.writeFourCC(FourCC_WAVE_adtl)
-
-  for id, region in ww.regions.pairs():
-    ww.startChunk(FourCC_WAVE_labl)
-    ww.writeUInt32(id)            # cuePointId
-    ww.writeString(region.label)  # text
-    ww.writeUInt8(0)              # null terminator
-    ww.endChunk()
-
-  for id, region in ww.regions.pairs():
-    if region.length > 0'u32:
-      ww.startChunk(FourCC_WAVE_ltxt)
-      ww.writeUInt32(id)             # cuePointId
-      ww.writeUInt32(region.length)  # sampleLength
-      ww.writeFourCC(FourCC_WAVE_rgn)  # purposeId
-      ww.writeUInt16(0)              # country (ignored)
-      ww.writeUInt16(0)              # language (ignored)
-      ww.writeUInt16(0)              # dialect (ignored)
-      ww.writeUInt16(0)              # codePage (ignored)
-      ww.endChunk()
-
-  ww.endChunk()
-]#
+  rw.endChunk()
 
 
 # vim: et:ts=2:sw=2:fdm=marker
