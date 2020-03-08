@@ -1,25 +1,80 @@
-import os, strformat, tables
+import os
+import strformat
+import strutils
+import times
+
 import easywave
 
-if paramCount() == 0:
-  echo "Usage: readtest WAVEFILE"
-  quit()
 
-var infile = paramStr(1)
-var wr = parseWaveFile(infile, readRegions = true)
+proc toTimeString(millis: Natural): string =
+  let p = initDuration(milliseconds = millis).toParts
+  fmt"{p[Hours]:02}:{p[Minutes]:02}:{p[Seconds]:02}.{p[Milliseconds]:03}"
 
-echo fmt"Endianness: {wr.endianness}"
-echo fmt"Format:     {wr.format}"
-echo fmt"Samplerate: {wr.sampleRate}"
-echo fmt"Channels:   {wr.numChannels}"
+proc framesToMillis(frames, sampleRate: Natural): Natural =
+  const MillisInSecond = 1000
+  (frames / sampleRate * MillisInSecond).int
 
-echo "\nChunks:"
-for ci in wr.chunks:
-  echo ci
+proc printWaveInfo(wi: WaveInfo, dataChunk: ChunkInfo) =
+  let
+    sampleRate      = wi.format.sampleRate
+    bitsPerSample   = wi.format.bitsPerSample
+    numChans        = wi.format.numChannels
+    numBytes        = dataChunk.size.int
+    numBytesHuman   = formatSize(numBytes, includeSpace=true)
+    numSamples      = numBytes div (bitsPerSample div 8)
+    numSampleFrames = numSamples div numChans
+    numMillis       = framesToMillis(numSampleFrames, sampleRate)
 
-if wr.regions.len > 0:
-  echo "\nRegions:"
-  for id, r in wr.regions.pairs:
-    echo fmt"id: {id}, {r}"
+  echo fmt"Endianness:         {wi.reader.endian}"
+  echo fmt"Sample format:      {wi.format.sampleFormat}"
+  echo fmt"Bits per sample:    {bitsPerSample}"
+  echo fmt"Sample rate:        {sampleRate}"
+  echo fmt"Channels:           {numChans}"
+  echo ""
+  echo fmt"Sample data size:   {numBytes} bytes ({numBytesHuman})"
+  echo fmt"Num samples:        {numSamples}"
+  echo fmt"Num samples frames: {numSampleFrames}"
+  echo fmt"Length:             {toTimeString(numMillis)}"
 
-wr.close()
+
+proc printRegionInfo(wi: WaveInfo) =
+  let sampleRate = wi.format.sampleRate
+
+  echo "\nRegions and labels:\n"
+
+  for id, r in wi.regions.pairs:
+    let startTime = framesToMillis(r.startFrame, sampleRate)
+    let rtype = if r.length > 0: "region" else: "label"
+
+    echo fmt"  ID:        {id}"
+    echo fmt"  Type:      {rtype}"
+
+    if r.length == 0:
+      echo fmt"  Position:  {toTimeString(startTime)} (frame {r.startFrame})"
+    else:
+      let length = framesToMillis(r.length, sampleRate)
+      let endFrame = r.startFrame + r.length
+      let endTime = framesToMillis(endFrame, sampleRate)
+      echo fmt"  Start:     {toTimeString(startTime)} (frame {r.startFrame})"
+      echo fmt"  End:       {toTimeString(endTime)} (frame {endFrame})"
+      echo fmt"  Duration:  {toTimeString(length)}"
+
+    echo ""
+
+
+proc main() =
+  if os.paramCount() == 0:
+    quit "Usage: readtest WAVEFILE"
+
+  var fname = os.paramStr(1)
+  let wi: WaveInfo = openWaveFile(fname, readRegions=true)
+
+  wi.reader.cursor = wi.dataCursor
+  let dataChunk = wi.reader.currentChunk
+
+  printWaveInfo(wi, dataChunk)
+  printRegionInfo(wi)
+
+
+main()
+
