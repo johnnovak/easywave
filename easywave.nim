@@ -196,8 +196,7 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(rr;
     of FourCC_WAVE_labl:
       let
         cuePointId = rr.read(uint32)
-        # do not read terminating zero byte
-        textLen = ci.size.int - sizeof(cuePointId) - 1
+        textLen = ci.size.int - sizeof(cuePointId) - 1  # minus trailing zero
         text = rr.readStr(textLen)
 
       if regions.hasKey(cuePointId):
