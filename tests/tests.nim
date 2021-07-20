@@ -1,5 +1,4 @@
-import common, geometry, interaction
-import math, unittest, times
+import unittest
 
 # {{{ Read tests / parseWaveFile
 suite "Read tests / parseWaveFile":

@@ -262,7 +262,7 @@ proc openWaveFile*(filename: string, readRegions: bool = false,
     rr.readRegionIdsAndStartOffsetsFromCueChunk(result.regions)
 
     rr.cursor = adtlCursor.get
-    rr.enterGroup()
+    discard rr.enterGroup()
     rr.readRegionLabelsAndEndOffsetsFromListChunk(result.regions)
 
 
