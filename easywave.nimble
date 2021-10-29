@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.2.0"
 author        = "John Novak <john@johnnovak.net>"
 description   = "Easy WAVE file handling in Nim"
 license       = "WTFPL"
@@ -9,7 +9,7 @@ skipDirs = @["doc", "examples"]
 
 # Dependencies
 
-requires "nim >= 0.20.0", "riff"
+requires "nim >= 1.6.0", "riff"
 
 # Tasks
 
