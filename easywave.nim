@@ -1,7 +1,6 @@
 ## :Author: John Novak <john@johnnovak.net>
 ##
 
-import endians
 import options
 import strformat
 import tables
@@ -213,7 +212,7 @@ proc readRegionLabelsAndEndOffsetsFromListChunk*(rr;
           regions[cuePointId].length = sampleLength
 
 type
-  WaveReadError* = object of Exception
+  WaveReadError* = object of IOError
 
 
 proc openWaveFile*(filename: string, readRegions: bool = false,

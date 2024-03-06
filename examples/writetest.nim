@@ -1,4 +1,7 @@
-import math, os, strformat, tables
+import math
+import os
+import tables
+
 import easywave
 
 const
