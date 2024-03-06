@@ -318,7 +318,7 @@ integers than with packed data, hence the two different methods.
 
 ## License
 
-Copyright © 2018-2019 John Novak <<john@johnnovak.net>>
+Copyright © 2018-2014 John Novak <<john@johnnovak.net>>
 
 This work is free. You can redistribute it and/or modify it under the terms of
 the **Do What The Fuck You Want To Public License, Version 2**, as published
